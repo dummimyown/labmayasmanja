@@ -1,1 +1,2591 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Lab Maya Fisika 3D — Energi Potensial Gravitasi & MediaPipe Line</title>
 
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Three.js r128 CDN untuk Rendering 3D WebGL 60 FPS -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+  <!-- MediaPipe Hands & Drawing/Camera Utils CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+
+  <!-- Google Fonts: Inter & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet" />
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+        },
+      },
+    };
+  </script>
+
+  <style>
+    /* Reset dasar dengan kerangka penuh yang rapi */
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      background-color: #020617;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    /* Izinkan seleksi teks pada input & textarea */
+    input, textarea {
+      user-select: text;
+      -webkit-user-select: text;
+    }
+
+    /* Custom Scrollbar Modern Terlihat Jelas di Semua Panel */
+    * {
+      scrollbar-width: thin;
+      scrollbar-color: #334155 #0f172a;
+    }
+    ::-webkit-scrollbar {
+      width: 7px;
+      height: 7px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #0f172a;
+      border-radius: 999px;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #334155;
+      border-radius: 999px;
+      border: 1px solid #0f172a;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #22d3ee;
+    }
+
+    /* Animasi Transisi Halus */
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(5px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .animate-fade-in {
+      animation: fadeIn 0.24s ease-out forwards;
+    }
+
+    @keyframes pulseGlow {
+      0%, 100% { box-shadow: 0 0 18px rgba(34, 211, 238, 0.55), 0 8px 20px rgba(2, 6, 23, 0.5); }
+      50% { box-shadow: 0 0 34px rgba(251, 191, 36, 0.85), 0 10px 26px rgba(2, 6, 23, 0.6); }
+    }
+    .btn-start-glow {
+      animation: pulseGlow 2s ease-in-out infinite;
+    }
+
+    #splash-screen.splash-hide {
+      opacity: 0;
+      transform: scale(1.03);
+      pointer-events: none;
+    }
+
+    /* Kursor interaktif untuk viewport 3D */
+    #three-container {
+      cursor: grab;
+      touch-action: none;
+    }
+    #three-container:active {
+      cursor: grabbing;
+    }
+
+    /* Custom Range Slider Futuristik */
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      background: #1e293b;
+      height: 6px;
+      border-radius: 999px;
+      outline: none;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #22d3ee;
+      border: 2px solid #0f172a;
+      cursor: pointer;
+      box-shadow: 0 0 10px rgba(34, 211, 238, 0.65);
+    }
+
+    /* Gaya Khusus Saat Mencetak LKPD (Print / Save as PDF A4) */
+    @media print {
+      @page {
+        size: A4 portrait;
+        margin: 14mm;
+      }
+      html, body {
+        width: auto !important;
+        height: auto !important;
+        overflow: visible !important;
+        background: #ffffff !important;
+        color: #0f172a !important;
+        display: block !important;
+      }
+      #app-stage {
+        display: none !important;
+      }
+      #print-lkpd-sheet {
+        display: block !important;
+        font-family: 'Inter', sans-serif;
+        color: #0f172a;
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+<body class="font-sans text-slate-100 antialiased bg-slate-950">
+
+  <!-- ==================== KERANGKA UTAMA FULL VIEWPORT (BEBAS TERPOTONG) ==================== -->
+  <div id="app-stage" class="relative w-screen h-screen flex flex-col overflow-hidden bg-slate-950">
+
+    <!-- ==================== SPLASH SCREEN OVERLAY ==================== -->
+    <div id="splash-screen" class="absolute inset-0 z-50 flex flex-col justify-between overflow-hidden bg-slate-950 transition-all duration-700 ease-out">
+      <!-- Gambar Utama Splash Screen (Otomatis fallback ke SVG jika splash.png tidak ditemukan) -->
+      <img
+        id="splash-bg-img"
+        src="splash.png"
+        alt="Splash Screen Lab Maya Fisika 3D Energi Potensial Gravitasi"
+        class="absolute inset-0 w-full h-full object-cover select-none pointer-events-none"
+        onerror="this.style.display='none'; document.getElementById('splash-fallback').classList.remove('hidden');"
+      />
+
+      <!-- Ilustrasi SVG Fallback Presisi -->
+      <div id="splash-fallback" class="hidden absolute inset-0 w-full h-full overflow-hidden bg-gradient-to-br from-slate-950 via-slate-900 to-cyan-950 select-none pointer-events-none">
+        <div class="absolute inset-0 opacity-65" style="background: radial-gradient(circle at 50% 42%, rgba(34,211,238,0.22) 0%, transparent 56%), radial-gradient(circle at 18% 60%, rgba(251,191,36,0.2) 0%, transparent 45%), radial-gradient(circle at 82% 55%, rgba(16,185,129,0.22) 0%, transparent 45%);"></div>
+
+        <svg class="absolute inset-0 w-full h-full opacity-20" viewBox="0 0 1280 720" fill="none">
+          <defs>
+            <pattern id="phys-grid" width="48" height="48" patternUnits="userSpaceOnUse">
+              <path d="M48 0H0V48" stroke="#38bdf8" stroke-width="0.7" />
+            </pattern>
+          </defs>
+          <rect width="1280" height="720" fill="url(#phys-grid)" />
+        </svg>
+
+        <!-- Pita Lengkung Atas & Bawah -->
+        <svg class="absolute top-0 left-0 w-2/5 h-auto" viewBox="0 0 420 120" fill="none">
+          <path d="M0 0H360C250 28 115 58 0 118V0Z" fill="#0284c7" opacity="0.85" />
+          <path d="M0 0H290C195 24 90 50 0 94V0Z" fill="#0369a1" />
+        </svg>
+        <svg class="absolute bottom-0 inset-x-0 w-full h-auto" viewBox="0 0 1280 120" fill="none" preserveAspectRatio="none">
+          <path d="M0 24C340 110 920 125 1280 42V120H0V24Z" fill="#f59e0b" opacity="0.85" />
+          <path d="M0 40C350 118 930 132 1280 62V120H0V40Z" fill="#0891b2" opacity="0.92" />
+          <path d="M0 58C360 125 940 135 1280 80V120H0V58Z" fill="#0f172a" />
+        </svg>
+
+        <!-- Ilustrasi Kiri: Menara Ukur & Bola Energi -->
+        <svg class="hidden md:block absolute bottom-[13%] left-[5%] w-[20%] h-auto drop-shadow-[0_12px_26px_rgba(251,191,36,0.35)]" viewBox="0 0 240 270" fill="none">
+          <rect x="28" y="22" width="18" height="218" rx="4" fill="#1e293b" stroke="#38bdf8" stroke-width="2.5" />
+          <line x1="46" y1="45" x2="66" y2="45" stroke="#38bdf8" stroke-width="2.5" />
+          <line x1="46" y1="135" x2="66" y2="135" stroke="#38bdf8" stroke-width="2.5" />
+          <line x1="46" y1="225" x2="66" y2="225" stroke="#38bdf8" stroke-width="2.5" />
+          <line x1="46" y1="78" x2="178" y2="78" stroke="#facc15" stroke-width="2" stroke-dasharray="6 4" />
+          <circle cx="144" cy="78" r="32" fill="rgba(251,191,36,0.25)" />
+          <circle cx="144" cy="78" r="22" fill="url(#ball-grad)" stroke="#fef08a" stroke-width="2.5" />
+          <defs>
+            <radialGradient id="ball-grad" cx="35%" cy="30%" r="70%">
+              <stop offset="0%" stop-color="#fef9c3" />
+              <stop offset="55%" stop-color="#f59e0b" />
+              <stop offset="100%" stop-color="#b45309" />
+            </radialGradient>
+          </defs>
+          <line x1="144" y1="108" x2="144" y2="196" stroke="#22d3ee" stroke-width="4" stroke-linecap="round" />
+          <polyline points="132,182 144,198 156,182" stroke="#22d3ee" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+          <ellipse cx="144" cy="238" rx="60" ry="14" fill="rgba(16,185,129,0.28)" stroke="#34d399" stroke-width="2.5" />
+        </svg>
+
+        <!-- Ilustrasi Kanan: Gestur Cubit MediaPipe Line -->
+        <svg class="hidden md:block absolute bottom-[15%] right-[5%] w-[20%] h-auto drop-shadow-[0_12px_26px_rgba(34,211,238,0.4)]" viewBox="0 0 240 240" fill="none">
+          <rect x="20" y="20" width="200" height="200" rx="22" fill="rgba(15,23,42,0.7)" stroke="#22d3ee" stroke-width="2.5" stroke-dasharray="10 6" />
+          <g stroke="#34d399" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="120,192 84,158 64,122 86,92" />
+            <polyline points="120,192 104,132 100,82 94,54" />
+            <polyline points="120,192 126,128 130,76 132,46" />
+            <polyline points="120,192 148,134 156,88 160,60" />
+            <polyline points="120,192 166,148 176,112 182,88" />
+            <line x1="104" y1="132" x2="166" y2="148" />
+          </g>
+          <line x1="86" y1="92" x2="94" y2="54" stroke="#facc15" stroke-width="4" stroke-dasharray="5 3" />
+          <circle cx="86" cy="92" r="8" fill="#facc15" stroke="#ffffff" stroke-width="2" />
+          <circle cx="94" cy="54" r="8" fill="#facc15" stroke="#ffffff" stroke-width="2" />
+          <text x="120" y="212" text-anchor="middle" fill="#67e8f9" font-size="11" font-family="JetBrains Mono" font-weight="800">CUBIT • MEDIAPIPE</text>
+        </svg>
+
+        <!-- Banner Judul Utama di Tengah -->
+        <div class="absolute inset-0 flex flex-col items-center justify-center pb-14 px-4">
+          <div class="relative flex flex-col items-center">
+            <div class="relative z-10 -mb-4 px-6 py-1.5 rounded-full bg-gradient-to-r from-amber-400 to-yellow-300 border-4 border-slate-950 shadow-lg flex items-center gap-2">
+              <span class="text-lg">⚡</span>
+              <span class="text-sm sm:text-xl lg:text-2xl font-extrabold text-slate-950 tracking-tight">Lab Maya Fisika 3D</span>
+            </div>
+
+            <div class="px-8 sm:px-14 py-6 sm:py-7 rounded-[2.5rem] bg-gradient-to-b from-slate-900/95 via-cyan-950/95 to-slate-950/95 border-[4px] border-cyan-400/90 shadow-2xl text-center backdrop-blur-md">
+              <div class="text-2xl sm:text-4xl lg:text-5xl font-black text-white tracking-tight drop-shadow-[0_4px_12px_rgba(34,211,238,0.45)] leading-tight">
+                Energi Potensial <span class="text-transparent bg-clip-text bg-gradient-to-r from-amber-300 via-cyan-300 to-emerald-300">Gravitasi</span>
+              </div>
+              <div class="text-[11px] sm:text-sm font-mono font-bold text-emerald-300 tracking-widest uppercase mt-2">
+                Ep = m · g · h  •  Gestur Cubit MediaPipe Line
+              </div>
+            </div>
+
+            <div class="relative z-10 -mt-4 px-7 py-1.5 rounded-full bg-white border-2 border-cyan-300 shadow-lg">
+              <span class="text-xs sm:text-sm lg:text-base font-extrabold text-slate-900">untuk Siswa SMA Fase E (Kelas X)</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bar Atas Splash Screen -->
+      <div class="relative z-20 flex items-center justify-between px-4 pt-3">
+        <div class="px-3.5 py-1 rounded-full bg-slate-950/80 backdrop-blur-md border border-cyan-400/40 text-[11px] font-bold text-cyan-200 shadow">
+          Fendy Novafianto, S.Pd. • SMAN 1 Boja
+        </div>
+        <button onclick="toggleSound()" title="Aktifkan/Matikan Efek Suara"
+          class="flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-950/80 hover:bg-slate-900/90 backdrop-blur-md border border-amber-400/40 text-xs font-bold text-amber-300 shadow transition cursor-pointer">
+          <span id="splash-sound-icon">🔊</span>
+          <span id="splash-sound-label">SFX ON</span>
+        </button>
+      </div>
+
+      <!-- Bar Bawah Splash Screen -->
+      <div class="relative z-20 flex flex-col items-center justify-end pb-5 px-6">
+        <div class="w-full max-w-md bg-slate-950/85 backdrop-blur-md border border-cyan-500/35 rounded-2xl px-5 py-3.5 shadow-2xl flex flex-col items-center gap-2.5">
+          <div id="splash-loading-wrap" class="w-full flex flex-col gap-1.5">
+            <div class="flex items-center justify-between text-[11px] sm:text-xs font-bold">
+              <span id="splash-loading-status" class="text-cyan-300">Menginisialisasi ruang Fisika 3D WebGL...</span>
+              <span id="splash-loading-percent" class="font-mono text-amber-300">0%</span>
+            </div>
+            <div class="w-full h-2.5 bg-slate-800 rounded-full overflow-hidden border border-slate-700">
+              <div id="splash-loading-bar" class="h-full w-0 rounded-full bg-gradient-to-r from-cyan-400 via-amber-400 to-emerald-400 transition-all duration-100 ease-out"></div>
+            </div>
+          </div>
+
+          <button
+            id="btn-splash-start"
+            onclick="enterLabFromSplash()"
+            onmouseenter="playSFX('hover')"
+            class="hidden w-full py-2.5 px-6 rounded-xl bg-gradient-to-r from-cyan-400 via-amber-300 to-emerald-400 hover:from-cyan-300 hover:to-emerald-300 text-slate-950 font-extrabold text-sm sm:text-base tracking-wide transition-all transform hover:scale-[1.02] active:scale-[0.98] cursor-pointer flex items-center justify-center gap-2 btn-start-glow">
+            <span>▶</span>
+            <span>MULAI PRAKTIKUM</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== HEADER & NAVIGASI 6 TAB ==================== -->
+    <header class="shrink-0 bg-slate-950/95 border-b border-slate-800 px-3 sm:px-4 py-2 flex flex-wrap items-center justify-between gap-2 z-20">
+      <!-- Identitas Aplikasi -->
+      <div class="flex items-center gap-2.5 min-w-0">
+        <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-cyan-500 via-amber-500 to-emerald-500 flex items-center justify-center shadow-lg shadow-cyan-500/20 shrink-0">
+          <svg class="w-5 h-5 text-slate-950" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.4">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+          </svg>
+        </div>
+        <div class="truncate">
+          <h1 class="text-xs sm:text-sm lg:text-base font-extrabold tracking-tight text-white leading-tight truncate">
+            LAB MAYA FISIKA 3D: <span class="text-cyan-400">ENERGI POTENSIAL</span>
+          </h1>
+          <p class="text-[10px] sm:text-xs text-slate-400 font-medium leading-tight truncate">
+            Fase E • Kelas X SMA • Gestur Cubit MediaPipe Line
+          </p>
+        </div>
+      </div>
+
+      <!-- Navigasi 6 Tab Utama -->
+      <nav class="flex items-center gap-1 bg-slate-900/90 p-1 rounded-xl border border-slate-800 overflow-x-auto max-w-full" aria-label="Menu Utama">
+        <button onclick="switchTab('tujuan')" id="tab-btn-tujuan" class="tab-btn shrink-0 px-2.5 py-1.5 rounded-lg text-[11px] lg:text-xs font-semibold transition-all cursor-pointer">Tujuan</button>
+        <button onclick="switchTab('teori')" id="tab-btn-teori" class="tab-btn shrink-0 px-2.5 py-1.5 rounded-lg text-[11px] lg:text-xs font-semibold transition-all cursor-pointer">Teori</button>
+        <button onclick="switchTab('prosedur')" id="tab-btn-prosedur" class="tab-btn shrink-0 px-2.5 py-1.5 rounded-lg text-[11px] lg:text-xs font-semibold transition-all cursor-pointer">Prosedur</button>
+        <button onclick="switchTab('simulasi')" id="tab-btn-simulasi" class="tab-btn shrink-0 px-2.5 py-1.5 rounded-lg text-[11px] lg:text-xs font-semibold transition-all cursor-pointer">Simulasi</button>
+        <button onclick="switchTab('lkpd')" id="tab-btn-lkpd" class="tab-btn shrink-0 px-2.5 py-1.5 rounded-lg text-[11px] lg:text-xs font-semibold transition-all cursor-pointer relative">
+          LKPD
+          <span id="lkpd-badge" class="hidden absolute -top-1 -right-1 w-4 h-4 rounded-full bg-emerald-400 text-[9px] font-extrabold text-slate-950 flex items-center justify-center">0</span>
+        </button>
+        <button onclick="switchTab('pengembang')" id="tab-btn-pengembang" class="tab-btn shrink-0 px-2.5 py-1.5 rounded-lg text-[11px] lg:text-xs font-semibold transition-all cursor-pointer">Pengembang</button>
+      </nav>
+
+      <!-- Kontrol Audio & Fullscreen -->
+      <div class="flex items-center gap-1.5 shrink-0">
+        <button id="btn-sound" onclick="toggleSound()" title="Aktifkan/Matikan Efek Suara"
+          class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-semibold text-cyan-300 transition cursor-pointer">
+          <span id="sound-icon">🔊</span>
+          <span class="hidden md:inline" id="sound-label">SFX ON</span>
+        </button>
+        <button id="btn-fullscreen" onclick="toggleFullscreen()" title="Layar Penuh"
+          class="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white transition cursor-pointer">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- ==================== AREA KONTEN UTAMA (FLEX-1 MIN-H-0) ==================== -->
+    <main class="relative flex-1 min-h-0 flex flex-col overflow-hidden bg-gradient-to-br from-slate-900 via-slate-900 to-slate-950">
+
+      <!-- Toast Notification (Pengganti alert/confirm) -->
+      <div id="toast-box" class="pointer-events-none absolute top-3 left-1/2 -translate-x-1/2 z-50 hidden">
+        <div id="toast-content" class="px-4 py-2 rounded-xl bg-slate-900/95 border border-cyan-500/60 text-xs sm:text-sm font-medium text-white shadow-2xl flex items-center gap-2 backdrop-blur-md">
+          <span id="toast-icon">ℹ️</span>
+          <span id="toast-msg">Notifikasi</span>
+        </div>
+      </div>
+
+      <!-- ==================== TAB 1: TUJUAN (FULL SCROLLABLE) ==================== -->
+      <section id="panel-tujuan" class="tab-panel hidden flex-1 min-h-0 overflow-y-auto p-4 sm:p-6 pb-10 animate-fade-in">
+        <div class="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-5">
+          <!-- Kolom Kiri: Capaian Pembelajaran -->
+          <div class="lg:col-span-5 bg-slate-800/60 border border-slate-700/70 rounded-2xl p-5 flex flex-col justify-between gap-4">
+            <div>
+              <span class="inline-block px-3 py-1 rounded-full bg-cyan-500/15 border border-cyan-500/35 text-cyan-300 text-xs font-bold mb-3">
+                CAPAIAN PEMBELAJARAN • FISIKA FASE E (KELAS X)
+              </span>
+              <h2 class="text-lg sm:text-xl font-extrabold text-white mb-2">
+                Halo Sobat SMA! Mari Eksplorasi Energi Potensial Gravitasi 3D
+              </h2>
+              <p class="text-xs sm:text-sm text-slate-300 leading-relaxed">
+                Melalui laboratorium maya ini, Sobat SMA akan menyelidiki hubungan antara massa, percepatan gravitasi, dan ketinggian terhadap besar Energi Potensial Gravitasi (<strong class="text-amber-300">Ep = m·g·h</strong>), memasang bola logam ke menara ukur dengan gestur cubit tangan (MediaPipe Hands Line), serta mengamati perubahan energi potensial menjadi energi kinetik saat jatuh bebas.
+              </p>
+            </div>
+            <div class="bg-slate-900/85 border border-amber-500/35 rounded-xl p-4">
+              <div class="text-xs font-bold text-amber-400 mb-1">💡 Pertanyaan Pemantik (PLTA &amp; Roller Coaster):</div>
+              <p class="text-xs text-slate-300 italic leading-relaxed">
+                "Mengapa bendungan Pembangkit Listrik Tenaga Air (PLTA) selalu dibangun sangat tinggi, dan mengapa puncak pertama lintasan roller coaster dibuat paling tinggi dibanding puncak lainnya?"
+              </p>
+            </div>
+          </div>
+
+          <!-- Kolom Kanan: 4 Kartu Tujuan Pembelajaran -->
+          <div class="lg:col-span-7 flex flex-col justify-between gap-4">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              <div class="bg-slate-800/50 border border-slate-700/60 rounded-2xl p-4">
+                <div class="w-8 h-8 rounded-lg bg-amber-500/20 text-amber-400 font-extrabold flex items-center justify-center text-sm mb-2">1</div>
+                <h3 class="text-sm font-bold text-white mb-1">Menyelidiki Variabel Ep = m·g·h</h3>
+                <p class="text-xs text-slate-300 leading-relaxed">
+                  Membuktikan secara eksperimental pengaruh massa beban (m), ketinggian (h), dan gravitasi planet (g) terhadap besar Energi Potensial Gravitasi.
+                </p>
+              </div>
+              <div class="bg-slate-800/50 border border-slate-700/60 rounded-2xl p-4">
+                <div class="w-8 h-8 rounded-lg bg-cyan-500/20 text-cyan-400 font-extrabold flex items-center justify-center text-sm mb-2">2</div>
+                <h3 class="text-sm font-bold text-white mb-1">Memasang Bola dengan Gestur Cubit</h3>
+                <p class="text-xs text-slate-300 leading-relaxed">
+                  Menggunakan teknologi Computer Vision (MediaPipe Hands Line) untuk mencubit bola dari Rak Bola, menggeser ke Menara Ukur, dan memasangnya pada ketinggian tertentu.
+                </p>
+              </div>
+              <div class="bg-slate-800/50 border border-slate-700/60 rounded-2xl p-4">
+                <div class="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-400 font-extrabold flex items-center justify-center text-sm mb-2">3</div>
+                <h3 class="text-sm font-bold text-white mb-1">Mengamati Kekekalan Energi</h3>
+                <p class="text-xs text-slate-300 leading-relaxed">
+                  Mengamati transformasi Energi Potensial (Ep) menjadi Energi Kinetik (Ek) selama gerak jatuh bebas dengan Energi Mekanik total (Em) tetap konstan.
+                </p>
+              </div>
+              <div class="bg-slate-800/50 border border-slate-700/60 rounded-2xl p-4">
+                <div class="w-8 h-8 rounded-lg bg-purple-500/20 text-purple-300 font-extrabold flex items-center justify-center text-sm mb-2">4</div>
+                <h3 class="text-sm font-bold text-white mb-1">Verifikasi Data &amp; Analisis HOTS</h3>
+                <p class="text-xs text-slate-300 leading-relaxed">
+                  Mencatat 6 percobaan pada LKPD interaktif, memverifikasi perhitungan Ep secara mandiri, serta menganalisis efisiensi PLTA dan gravitasi planet.
+                </p>
+              </div>
+            </div>
+
+            <div class="flex flex-wrap items-center justify-between gap-3 bg-cyan-950/40 border border-cyan-500/30 rounded-xl px-4 py-3">
+              <span class="text-xs text-cyan-200 font-medium">Siap bereksperimen memasang bola 3D dengan gestur cubit atau membaca teori dulu?</span>
+              <div class="flex gap-2">
+                <button onclick="switchTab('teori')" class="px-3.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-bold text-white transition cursor-pointer">Baca Teori →</button>
+                <button onclick="switchTab('simulasi')" class="px-3.5 py-2 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-xs font-bold text-slate-950 transition cursor-pointer">Mulai Simulasi 3D ⚡</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================== TAB 2: TEORI (FULL SCROLLABLE) ==================== -->
+      <section id="panel-teori" class="tab-panel hidden flex-1 min-h-0 overflow-y-auto p-4 sm:p-6 pb-10 animate-fade-in">
+        <div class="max-w-6xl mx-auto flex flex-col gap-5">
+          <!-- Persamaan Fisika Inti -->
+          <div class="bg-slate-800/60 border border-slate-700/70 rounded-2xl p-4 grid grid-cols-2 lg:grid-cols-4 gap-3 items-center">
+            <div class="bg-slate-950/85 border border-amber-500/40 rounded-xl p-3 text-center">
+              <div class="text-[10px] text-amber-300 uppercase font-bold">Energi Potensial</div>
+              <div class="font-mono text-sm sm:text-base font-extrabold text-white mt-0.5">Ep = m · g · h</div>
+              <div class="text-[10px] text-slate-400">Satuan: Joule (J)</div>
+            </div>
+            <div class="bg-slate-950/85 border border-cyan-500/40 rounded-xl p-3 text-center">
+              <div class="text-[10px] text-cyan-300 uppercase font-bold">Energi Kinetik</div>
+              <div class="font-mono text-sm sm:text-base font-extrabold text-white mt-0.5">Ek = ½ · m · v²</div>
+              <div class="text-[10px] text-slate-400">Energi gerak benda</div>
+            </div>
+            <div class="bg-slate-950/85 border border-emerald-500/40 rounded-xl p-3 text-center">
+              <div class="text-[10px] text-emerald-300 uppercase font-bold">Energi Mekanik</div>
+              <div class="font-mono text-sm sm:text-base font-extrabold text-white mt-0.5">Em = Ep + Ek</div>
+              <div class="text-[10px] text-slate-400">Kekal tanpa gesekan</div>
+            </div>
+            <div class="bg-slate-950/85 border border-purple-500/40 rounded-xl p-3 text-center">
+              <div class="text-[10px] text-purple-300 uppercase font-bold">Kecepatan Jatuh</div>
+              <div class="font-mono text-sm sm:text-base font-extrabold text-white mt-0.5">v = √(2 · g · h)</div>
+              <div class="text-[10px] text-slate-400">Tepat di landasan</div>
+            </div>
+          </div>
+
+          <!-- 3 Kartu Faktor Penentu Energi Potensial Gravitasi -->
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <!-- Faktor 1: Massa -->
+            <div class="bg-gradient-to-b from-amber-500/10 to-slate-800/60 border border-amber-500/40 rounded-2xl p-5 flex flex-col justify-between gap-3">
+              <div>
+                <div class="flex items-center justify-between mb-2">
+                  <span class="px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[11px] font-bold">FAKTOR 1: MASSA</span>
+                  <span class="font-mono text-xs font-bold text-amber-300">m (kg)</span>
+                </div>
+                <h3 class="text-sm font-extrabold text-white mb-1.5">Berbanding Lurus (Ep ∝ m)</h3>
+                <p class="text-xs text-slate-300 leading-relaxed mb-3">
+                  Semakin besar massa benda pada ketinggian dan planet yang sama, semakin besar gaya beratnya (<strong class="text-white">W = m·g</strong>) sehingga Energi Potensial yang tersimpan semakin besar.
+                </p>
+                <ul class="text-xs text-slate-200 space-y-1.5">
+                  <li>• Massa digandakan (2×) → <strong>Ep menjadi 2× lipat</strong>.</li>
+                  <li>• Pada simulasi 3D, diameter &amp; kilau bola logam membesar sesuai massa (1–10 kg).</li>
+                </ul>
+              </div>
+              <div class="bg-slate-950/75 rounded-xl p-2.5 font-mono text-[10px] text-amber-200 border border-slate-700/60">
+                Catatan: Kecepatan jatuh v = √(2gh) tidak bergantung massa!
+              </div>
+            </div>
+
+            <!-- Faktor 2: Gravitasi -->
+            <div class="bg-gradient-to-b from-cyan-500/10 to-slate-800/60 border border-cyan-500/40 rounded-2xl p-5 flex flex-col justify-between gap-3">
+              <div>
+                <div class="flex items-center justify-between mb-2">
+                  <span class="px-2.5 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 text-[11px] font-bold">FAKTOR 2: GRAVITASI</span>
+                  <span class="font-mono text-xs font-bold text-cyan-300">g (m/s²)</span>
+                </div>
+                <h3 class="text-sm font-extrabold text-white mb-1.5">Medan Gravitasi Planet (Ep ∝ g)</h3>
+                <p class="text-xs text-slate-300 leading-relaxed mb-3">
+                  Setiap benda langit memiliki kuat medan gravitasi berbeda bergantung pada massa dan jari-jari planetnya.
+                </p>
+                <div class="grid grid-cols-2 gap-1.5 font-mono text-[11px]">
+                  <div class="bg-slate-900/80 border border-cyan-500/30 rounded-lg px-2 py-1.5 text-cyan-300">🌍 Bumi: 9.80</div>
+                  <div class="bg-slate-900/80 border border-slate-500/30 rounded-lg px-2 py-1.5 text-slate-200">🌙 Bulan: 1.62</div>
+                  <div class="bg-slate-900/80 border border-orange-500/30 rounded-lg px-2 py-1.5 text-orange-300">🔴 Mars: 3.71</div>
+                  <div class="bg-slate-900/80 border border-amber-500/30 rounded-lg px-2 py-1.5 text-amber-300">🪐 Jupiter: 24.79</div>
+                </div>
+              </div>
+              <div class="bg-slate-950/75 rounded-xl p-2.5 font-mono text-[10px] text-cyan-200 border border-slate-700/60">
+                Gravitasi Jupiter ~2.5× Bumi &amp; ~15× Bulan!
+              </div>
+            </div>
+
+            <!-- Faktor 3: Ketinggian -->
+            <div class="bg-gradient-to-b from-emerald-500/10 to-slate-800/60 border border-emerald-500/40 rounded-2xl p-5 flex flex-col justify-between gap-3">
+              <div>
+                <div class="flex items-center justify-between mb-2">
+                  <span class="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[11px] font-bold">FAKTOR 3: KETINGGIAN</span>
+                  <span class="font-mono text-xs font-bold text-emerald-300">h (m)</span>
+                </div>
+                <h3 class="text-sm font-extrabold text-white mb-1.5">Posisi Vertikal Acuan (Ep ∝ h)</h3>
+                <p class="text-xs text-slate-300 leading-relaxed mb-3">
+                  Ketinggian diukur tegak lurus dari bidang acuan (<strong class="text-white">h = 0 m</strong> di lantai sensor). Semakin tinggi benda dipasang di menara, semakin besar usaha yang tersimpan sebagai Ep.
+                </p>
+                <ul class="text-xs text-slate-200 space-y-1.5">
+                  <li>• Saat terpasang di puncak: <strong>Ep maksimum, Ek = 0</strong>.</li>
+                  <li>• Saat menyentuh lantai (h = 0): <strong>Ep = 0, Ek maksimum</strong>.</li>
+                </ul>
+              </div>
+              <div class="bg-slate-950/75 rounded-xl p-2.5 font-mono text-[10px] text-emerald-200 border border-slate-700/60">
+                Usaha mengangkat beban: W = ΔEp = m · g · (h₂ − h₁)
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================== TAB 3: PROSEDUR (FULL SCROLLABLE) ==================== -->
+      <section id="panel-prosedur" class="tab-panel hidden flex-1 min-h-0 overflow-y-auto p-4 sm:p-6 pb-10 animate-fade-in">
+        <div class="max-w-6xl mx-auto flex flex-col gap-5">
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 class="text-base sm:text-lg font-extrabold text-white">Panduan Praktikum: Memasang Bola dengan Gestur Cubit (MediaPipe Line)</h2>
+              <p class="text-xs text-slate-400">Halo Sobat SMA! Ikuti 6 langkah ini menggunakan webcam MediaPipe Hands atau drag mouse/sentuhan langsung di layar 3D.</p>
+            </div>
+            <button onclick="switchTab('simulasi')" class="px-4 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-xs font-bold text-slate-950 shadow-lg shadow-cyan-500/20 transition cursor-pointer">
+              Buka Ruang Simulasi 3D →
+            </button>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div class="bg-slate-800/60 border border-slate-700/70 rounded-2xl p-4">
+              <div class="flex items-center gap-2.5 mb-2">
+                <span class="w-7 h-7 rounded-full bg-cyan-500 text-slate-950 font-extrabold text-xs flex items-center justify-center shrink-0">1</span>
+                <h3 class="text-sm font-bold text-white">Aktifkan MediaPipe Line</h3>
+              </div>
+              <p class="text-xs text-slate-300 leading-relaxed">
+                Pada tab <strong>Simulasi</strong>, klik tombol <strong>📷 MediaPipe Line: ON</strong> dan izinkan akses kamera. Tampilan HUD kamera cermin dengan kerangka garis tangan cyan/hijau serta <strong>Kursor Tangan 3D</strong> akan muncul.
+              </p>
+            </div>
+
+            <div class="bg-slate-800/60 border border-slate-700/70 rounded-2xl p-4">
+              <div class="flex items-center gap-2.5 mb-2">
+                <span class="w-7 h-7 rounded-full bg-amber-400 text-slate-950 font-extrabold text-xs flex items-center justify-center shrink-0">2</span>
+                <h3 class="text-sm font-bold text-white">Arahkan ke Rak Bola &amp; Cubit</h3>
+              </div>
+              <p class="text-xs text-slate-300 leading-relaxed">
+                Arahkan Kursor Tangan 3D ke bola di <strong>Rak Bola (kiri menara)</strong> hingga bola berpendar terang. Lalu lakukan gestur <strong>CUBIT (Pinch)</strong> dengan menyatukan ujung ibu jari &amp; telunjuk untuk mengambil bola!
+              </p>
+            </div>
+
+            <div class="bg-slate-800/60 border border-slate-700/70 rounded-2xl p-4">
+              <div class="flex items-center gap-2.5 mb-2">
+                <span class="w-7 h-7 rounded-full bg-emerald-400 text-slate-950 font-extrabold text-xs flex items-center justify-center shrink-0">3</span>
+                <h3 class="text-sm font-bold text-white">Geser &amp; Magnetic Snap ke Menara</h3>
+              </div>
+              <p class="text-xs text-slate-300 leading-relaxed">
+                Sambil menahan cubitan, geser tangan ke kanan mendekati <strong>Menara Ukur (x = 0)</strong> lalu naik/turun untuk mengatur ketinggian <strong>h (0.5–20 m)</strong>. Bola akan otomatis terkunci magnetis di rel menara!
+              </p>
+            </div>
+
+            <div class="bg-slate-800/60 border border-slate-700/70 rounded-2xl p-4">
+              <div class="flex items-center gap-2.5 mb-2">
+                <span class="w-7 h-7 rounded-full bg-purple-400 text-slate-950 font-extrabold text-xs flex items-center justify-center shrink-0">4</span>
+                <h3 class="text-sm font-bold text-white">Lepas Cubitan untuk Memasang</h3>
+              </div>
+              <p class="text-xs text-slate-300 leading-relaxed">
+                Pada <strong>Mode Pasang &amp; Tahan</strong> (default), membuka cubitan akan <strong>MEMASANG</strong> bola pada klem menara. Pada <strong>Mode Auto-Jatuh</strong>, membuka cubitan langsung menjatuhkan bola bebas. (Tanpa kamera? Cukup klik &amp; seret bola pakai mouse/sentuhan!)
+              </p>
+            </div>
+
+            <div class="bg-slate-800/60 border border-slate-700/70 rounded-2xl p-4">
+              <div class="flex items-center gap-2.5 mb-2">
+                <span class="w-7 h-7 rounded-full bg-rose-400 text-slate-950 font-extrabold text-xs flex items-center justify-center shrink-0">5</span>
+                <h3 class="text-sm font-bold text-white">Jatuhkan &amp; Amati Energi</h3>
+              </div>
+              <p class="text-xs text-slate-300 leading-relaxed">
+                Klik <strong>⬇ Jatuhkan Bola</strong> untuk melihat perubahan grafik <strong>Ep → Ek</strong> dan gelombang kejut saat benturan. Gunakan juga tombol <strong>Catat ke LKPD</strong> saat bola terpasang di ketinggian target.
+              </p>
+            </div>
+
+            <div class="bg-slate-800/60 border border-slate-700/70 rounded-2xl p-4">
+              <div class="flex items-center gap-2.5 mb-2">
+                <span class="w-7 h-7 rounded-full bg-sky-400 text-slate-950 font-extrabold text-xs flex items-center justify-center shrink-0">6</span>
+                <h3 class="text-sm font-bold text-white">Verifikasi LKPD &amp; Cetak PDF</h3>
+              </div>
+              <p class="text-xs text-slate-300 leading-relaxed">
+                Buka tab <strong>LKPD</strong>, hitung nilai <strong>Ep = m·g·h</strong> pada 6 baris percobaan, klik <strong>✓ Periksa</strong>, jawab 2 soal analisis HOTS &amp; Kesimpulan, lalu cetak atau simpan PDF A4.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================== TAB 4: SIMULASI 3D (PANEL KONTROL FULL SCROLLABLE) ==================== -->
+      <section id="panel-simulasi" class="tab-panel flex-1 min-h-0 flex flex-col lg:grid lg:grid-cols-12 gap-3 p-3 overflow-y-auto lg:overflow-hidden pb-10 lg:pb-3 animate-fade-in">
+
+        <!-- AREA KIRI (8 KOLOM): VIEWPORT 3D THREE.JS + HUD MEDIAPIPE + GRAFIK ENERGI -->
+        <div class="lg:col-span-8 min-h-[380px] lg:min-h-0 lg:h-full relative bg-slate-950 rounded-2xl border border-slate-700/80 overflow-hidden flex flex-col shadow-inner shrink-0">
+
+          <!-- Info Bar Atas Kiri Viewport 3D -->
+          <div class="absolute top-2.5 left-3 z-10 flex flex-wrap items-center gap-1.5 pointer-events-none max-w-[60%]">
+            <div class="flex items-center gap-2 bg-slate-900/90 backdrop-blur-md border border-slate-700/80 px-2.5 py-1.5 rounded-xl">
+              <span id="sim-planet-dot" class="w-2.5 h-2.5 rounded-full bg-cyan-400"></span>
+              <span id="sim-planet-label" class="text-xs font-extrabold text-white">Bumi</span>
+              <span id="sim-gravity-badge" class="text-[10px] font-mono font-bold text-cyan-300 bg-cyan-500/15 border border-cyan-500/30 px-1.5 py-0.5 rounded">g = 9.80 m/s²</span>
+            </div>
+            <button onclick="resetCamera()" title="Reset Sudut Kamera 3D"
+              class="pointer-events-auto px-2.5 py-1.5 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-slate-700 text-[10px] font-bold text-slate-300 backdrop-blur-md transition cursor-pointer">
+              🎯 Reset Kamera
+            </button>
+          </div>
+
+          <!-- Status HUD Pemasangan Bola (Tengah Atas) -->
+          <div class="absolute top-12 left-3 z-10 pointer-events-none">
+            <div id="ball-status-hud" class="px-3 py-1 rounded-xl bg-slate-900/88 border border-amber-400/50 text-[11px] font-bold text-amber-300 backdrop-blur-md shadow">
+              📦 Bola di Rak — Cubit / Seret ke Menara!
+            </div>
+          </div>
+
+          <!-- Overlay Grafik Batang Energi Real-Time (Pojok Kanan Atas) -->
+          <div class="absolute top-2.5 right-3 z-10 w-44 sm:w-48 bg-slate-900/88 backdrop-blur-md border border-slate-700/80 rounded-xl p-2.5 pointer-events-none shadow-lg">
+            <div class="flex items-center justify-between mb-1.5">
+              <span class="text-[10px] font-extrabold uppercase tracking-wider text-slate-300">Grafik Energi (J)</span>
+              <span class="text-[9px] font-mono text-emerald-400">Em = Ep + Ek</span>
+            </div>
+            <div class="space-y-1.5">
+              <div>
+                <div class="flex justify-between text-[10px] font-mono">
+                  <span class="text-amber-300 font-bold">Ep</span>
+                  <span id="bar-ep-val" class="text-white font-bold">0.0 J</span>
+                </div>
+                <div class="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+                  <div id="bar-ep-fill" class="h-full bg-gradient-to-r from-amber-500 to-yellow-300 rounded-full transition-all duration-75" style="width: 0%;"></div>
+                </div>
+              </div>
+              <div>
+                <div class="flex justify-between text-[10px] font-mono">
+                  <span class="text-cyan-300 font-bold">Ek</span>
+                  <span id="bar-ek-val" class="text-white font-bold">0.0 J</span>
+                </div>
+                <div class="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+                  <div id="bar-ek-fill" class="h-full bg-gradient-to-r from-cyan-500 to-sky-300 rounded-full transition-all duration-75" style="width: 0%;"></div>
+                </div>
+              </div>
+              <div>
+                <div class="flex justify-between text-[10px] font-mono">
+                  <span class="text-emerald-300 font-bold">Em</span>
+                  <span id="bar-em-val" class="text-white font-bold">0.0 J</span>
+                </div>
+                <div class="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+                  <div id="bar-em-fill" class="h-full bg-gradient-to-r from-emerald-500 to-teal-300 rounded-full transition-all duration-75" style="width: 0%;"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Overlay HUD MediaPipe Hand Tracking Line (PiP Pojok Kiri Bawah saat Kamera ON) -->
+          <div id="mp-hud-box" class="hidden absolute bottom-16 left-3 z-20 w-44 sm:w-52 bg-slate-950/92 border-2 border-cyan-400/75 rounded-xl overflow-hidden shadow-2xl backdrop-blur-md">
+            <div class="flex items-center justify-between px-2 py-1 bg-slate-900/95 border-b border-slate-800">
+              <span class="text-[9px] font-mono font-extrabold text-cyan-300 flex items-center gap-1">
+                <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                MEDIAPIPE LINE
+              </span>
+              <span id="mp-pinch-dist" class="text-[9px] font-mono text-amber-300">d: --</span>
+            </div>
+            <div class="relative w-full aspect-[4/3] bg-slate-950">
+              <video id="mp-video" class="hidden" playsinline></video>
+              <canvas id="mp-canvas" width="240" height="180" class="w-full h-full block"></canvas>
+            </div>
+            <div id="mp-gesture-hud" class="px-2 py-1 text-center text-[10px] font-extrabold bg-slate-900 text-cyan-300 truncate">
+              Arahkan tangan ke kamera...
+            </div>
+          </div>
+
+          <!-- Container WebGL Three.js -->
+          <div id="three-container" class="w-full h-full flex-1 relative"></div>
+
+          <!-- Bar Pengamatan Real-Time di Bawah Viewport -->
+          <div class="absolute bottom-2.5 left-3 right-3 z-10 grid grid-cols-2 sm:grid-cols-4 gap-2 pointer-events-none">
+            <div class="bg-slate-900/88 backdrop-blur-md border border-slate-700/80 rounded-xl px-2.5 py-1.5">
+              <div class="text-[10px] text-slate-400 font-semibold uppercase">Ketinggian (h)</div>
+              <div id="obs-h" class="text-xs sm:text-sm font-mono font-extrabold text-emerald-300">0.00 m</div>
+            </div>
+            <div class="bg-slate-900/88 backdrop-blur-md border border-slate-700/80 rounded-xl px-2.5 py-1.5">
+              <div class="text-[10px] text-slate-400 font-semibold uppercase">Kecepatan (v)</div>
+              <div id="obs-v" class="text-xs sm:text-sm font-mono font-extrabold text-cyan-300">0.00 m/s</div>
+            </div>
+            <div class="bg-slate-900/88 backdrop-blur-md border border-slate-700/80 rounded-xl px-2.5 py-1.5">
+              <div class="text-[10px] text-slate-400 font-semibold uppercase">Energi Potensial (Ep)</div>
+              <div id="obs-ep" class="text-xs sm:text-sm font-mono font-extrabold text-amber-300">0.0 J</div>
+            </div>
+            <div class="bg-slate-900/88 backdrop-blur-md border border-slate-700/80 rounded-xl px-2.5 py-1.5">
+              <div class="text-[10px] text-slate-400 font-semibold uppercase">Energi Kinetik (Ek)</div>
+              <div id="obs-ek" class="text-xs sm:text-sm font-mono font-extrabold text-sky-300">0.0 J</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- AREA KANAN (4 KOLOM): PANEL KONTROL INTERAKTIF (SCROLLABLE SAMPAI BAWAH!) -->
+        <div class="lg:col-span-4 min-h-0 lg:h-full overflow-y-auto pr-1 pb-10 flex flex-col gap-2.5">
+
+          <!-- 1. Kontrol Kamera MediaPipe Line & Mode Lepas Cubitan -->
+          <div class="bg-slate-800/60 border border-cyan-500/40 rounded-2xl p-3 flex flex-col gap-2 shrink-0">
+            <div class="flex items-center justify-between">
+              <h3 class="text-[11px] font-extrabold uppercase tracking-wider text-cyan-400">1. Gestur Cubit MediaPipe</h3>
+              <span id="mp-status-pill" class="text-[9px] font-bold px-2 py-0.5 rounded-full bg-slate-900 text-slate-400 border border-slate-700">Standby</span>
+            </div>
+
+            <button id="btn-mediapipe" onclick="toggleMediaPipe()"
+              class="w-full py-2 px-3 rounded-xl border font-extrabold text-xs transition-all cursor-pointer flex items-center justify-center gap-2 bg-slate-900/90 hover:bg-slate-800 border-cyan-500/50 text-cyan-300 shadow">
+              <span>📷</span>
+              <span id="mp-btn-label">MediaPipe Line: OFF</span>
+            </button>
+
+            <!-- Toggle 2 Mode Lepas Cubitan -->
+            <div class="flex flex-col gap-1">
+              <span class="text-[10px] font-bold text-slate-300">Mode Saat Lepas Cubitan di Menara:</span>
+              <div class="grid grid-cols-2 gap-1.5">
+                <button id="mode-btn-mount" onclick="setReleaseMode('mount')"
+                  class="py-1.5 px-2 rounded-lg border text-[10px] font-extrabold transition cursor-pointer bg-emerald-500/20 border-emerald-400 text-emerald-200">
+                  📌 Pasang &amp; Tahan
+                </button>
+                <button id="mode-btn-drop" onclick="setReleaseMode('auto_drop')"
+                  class="py-1.5 px-2 rounded-lg border text-[10px] font-bold transition cursor-pointer bg-slate-900/80 hover:bg-slate-800 border-slate-700 text-slate-300">
+                  ⚡ Auto-Jatuh
+                </button>
+              </div>
+            </div>
+
+            <div id="mp-gesture-panel" class="text-[10px] text-slate-300 bg-slate-950/75 rounded-lg px-2.5 py-1.5 border border-slate-800 text-center leading-snug">
+              🤏 Cubit bola di Rak → Geser ke Menara → Lepas untuk memasang!
+            </div>
+          </div>
+
+          <!-- 2. Lingkungan Gravitasi (4 Planet) -->
+          <div class="bg-slate-800/60 border border-slate-700/70 rounded-2xl p-3 flex flex-col gap-2 shrink-0">
+            <h3 class="text-[11px] font-extrabold uppercase tracking-wider text-amber-400">2. Lingkungan Gravitasi (g)</h3>
+            <div class="grid grid-cols-2 gap-1.5">
+              <button onclick="selectPlanet('bumi')" id="pbtn-bumi"
+                class="px-2.5 py-1.5 rounded-xl border text-left transition cursor-pointer bg-cyan-500/20 border-cyan-400 text-white">
+                <div class="text-[11px] font-extrabold">🌍 Bumi</div>
+                <div class="text-[9px] font-mono text-cyan-200">9.80 m/s²</div>
+              </button>
+              <button onclick="selectPlanet('bulan')" id="pbtn-bulan"
+                class="px-2.5 py-1.5 rounded-xl border text-left transition cursor-pointer bg-slate-900/70 hover:bg-slate-800 border-slate-700 text-slate-300">
+                <div class="text-[11px] font-extrabold">🌙 Bulan</div>
+                <div class="text-[9px] font-mono text-slate-400">1.62 m/s²</div>
+              </button>
+              <button onclick="selectPlanet('mars')" id="pbtn-mars"
+                class="px-2.5 py-1.5 rounded-xl border text-left transition cursor-pointer bg-slate-900/70 hover:bg-slate-800 border-slate-700 text-slate-300">
+                <div class="text-[11px] font-extrabold">🔴 Mars</div>
+                <div class="text-[9px] font-mono text-slate-400">3.71 m/s²</div>
+              </button>
+              <button onclick="selectPlanet('jupiter')" id="pbtn-jupiter"
+                class="px-2.5 py-1.5 rounded-xl border text-left transition cursor-pointer bg-slate-900/70 hover:bg-slate-800 border-slate-700 text-slate-300">
+                <div class="text-[11px] font-extrabold">🪐 Jupiter</div>
+                <div class="text-[9px] font-mono text-slate-400">24.79 m/s²</div>
+              </button>
+            </div>
+          </div>
+
+          <!-- 3. Parameter Manual Massa & Ketinggian -->
+          <div class="bg-slate-800/60 border border-slate-700/70 rounded-2xl p-3 flex flex-col gap-3 shrink-0">
+            <h3 class="text-[11px] font-extrabold uppercase tracking-wider text-emerald-400">3. Parameter Manual (Cadangan)</h3>
+
+            <div class="flex flex-col gap-1">
+              <div class="flex justify-between text-[11px] font-bold">
+                <span class="text-slate-200">Massa Bola (m)</span>
+                <span id="lbl-mass" class="font-mono text-amber-300">5 kg</span>
+              </div>
+              <input id="slider-mass" type="range" min="1" max="10" step="1" value="5" oninput="onMassSlider(this.value)" />
+            </div>
+
+            <div class="flex flex-col gap-1">
+              <div class="flex justify-between text-[11px] font-bold">
+                <span class="text-slate-200">Pasang di Ketinggian (h)</span>
+                <span id="lbl-height" class="font-mono text-emerald-300">10.0 m</span>
+              </div>
+              <input id="slider-height" type="range" min="0.5" max="20" step="0.5" value="10" oninput="onHeightSlider(this.value)" />
+            </div>
+          </div>
+
+          <!-- 4. Tombol Aksi Bola, LKPD & Reset -->
+          <div class="bg-slate-800/60 border border-slate-700/70 rounded-2xl p-3 flex flex-col gap-2 shrink-0">
+            <h3 class="text-[11px] font-extrabold uppercase tracking-wider text-slate-300">4. Aksi Eksperimen</h3>
+            <div class="grid grid-cols-2 gap-2">
+              <button onclick="dropBall()"
+                class="py-2 px-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-extrabold text-xs shadow transition cursor-pointer">
+                ⬇ Jatuhkan Bola
+              </button>
+              <button onclick="returnBallToDock()"
+                class="py-2 px-2.5 rounded-xl bg-slate-700 hover:bg-slate-600 text-white font-bold text-xs transition cursor-pointer">
+                📦 Kembalikan ke Rak
+              </button>
+            </div>
+            <div class="grid grid-cols-5 gap-2">
+              <button onclick="recordToLKPD()"
+                class="col-span-3 py-2 px-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-xs shadow-lg shadow-emerald-500/20 transition cursor-pointer">
+                📝 Catat ke LKPD
+              </button>
+              <button onclick="resetSimulation()"
+                class="col-span-2 py-2 px-2.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/50 text-rose-300 font-bold text-xs transition cursor-pointer">
+                🔄 Reset
+              </button>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- ==================== TAB 5: LKPD INTERAKTIF (FULL SCROLLABLE) ==================== -->
+      <section id="panel-lkpd" class="tab-panel hidden flex-1 min-h-0 overflow-y-auto p-4 sm:p-6 pb-10 animate-fade-in">
+        <div class="max-w-6xl mx-auto flex flex-col gap-4">
+          <!-- Header LKPD -->
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 class="text-sm sm:text-base font-extrabold text-white">LKPD Interaktif — 6 Percobaan Energi Potensial, Verifikasi Ep &amp; HOTS</h2>
+              <p class="text-xs text-slate-400">Pasang bola di Menara Ukur, catat 6 percobaan, hitung nilai Ep = m·g·h, klik Periksa, jawab HOTS, lalu Cetak A4.</p>
+            </div>
+            <div class="flex flex-wrap items-center gap-1.5">
+              <div id="lkpd-score-box" class="hidden px-3 py-1.5 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-extrabold">
+                Skor: 0/6
+              </div>
+              <button onclick="checkLKPDAnswers()" class="px-3 py-1.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-extrabold transition cursor-pointer">
+                ✓ Periksa
+              </button>
+              <button onclick="printLKPD()" class="px-3 py-1.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 text-xs font-extrabold transition cursor-pointer">
+                🖨️ Cetak A4 PDF
+              </button>
+              <button onclick="copyLKPDSummary()" class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 text-xs font-bold transition cursor-pointer">
+                📋 Salin
+              </button>
+              <button onclick="resetLKPD()" class="px-3 py-1.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/40 text-rose-300 text-xs font-bold transition cursor-pointer">
+                Reset
+              </button>
+            </div>
+          </div>
+
+          <!-- Grid LKPD 2 Kolom -->
+          <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+            <!-- Tabel 6 Percobaan (7 Kolom) -->
+            <div class="lg:col-span-7 bg-slate-800/50 border border-slate-700/70 rounded-2xl overflow-x-auto">
+              <table class="w-full text-left border-collapse min-w-[520px]">
+                <thead>
+                  <tr class="bg-slate-950/85 text-[11px] uppercase text-cyan-400 border-b border-slate-700">
+                    <th class="py-2.5 px-2 w-8 text-center">No</th>
+                    <th class="py-2.5 px-2">Target Percobaan</th>
+                    <th class="py-2.5 px-2 text-center">m (kg)</th>
+                    <th class="py-2.5 px-2 text-center">g (m/s²)</th>
+                    <th class="py-2.5 px-2 text-center">h (m)</th>
+                    <th class="py-2.5 px-2 text-center w-28">Hitung Ep (J)</th>
+                    <th class="py-2.5 px-2 text-center w-16">Status</th>
+                  </tr>
+                </thead>
+                <tbody id="lkpd-table-body" class="divide-y divide-slate-700/50 text-xs">
+                  <!-- Diisi dinamis oleh JS -->
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Identitas, 2 Soal HOTS & Kesimpulan (5 Kolom) -->
+            <div class="lg:col-span-5 flex flex-col gap-3">
+              <!-- Identitas Siswa -->
+              <div class="grid grid-cols-3 gap-2 bg-slate-800/60 border border-slate-700/70 rounded-xl p-2.5">
+                <input id="lkpd-name" type="text" placeholder="Nama Siswa / Kelompok..."
+                  class="col-span-2 bg-slate-950/70 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500" />
+                <input id="lkpd-class" type="text" placeholder="Kelas (X-...)"
+                  class="col-span-1 bg-slate-950/70 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500" />
+              </div>
+
+              <!-- Pertanyaan HOTS -->
+              <div class="bg-slate-800/60 border border-amber-500/40 rounded-2xl p-3 flex flex-col gap-3">
+                <div class="flex items-center justify-between">
+                  <span class="text-xs font-extrabold uppercase tracking-wider text-amber-300">🧠 Pertanyaan Analisis HOTS</span>
+                  <span class="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-200 font-bold">C4–C5</span>
+                </div>
+
+                <div class="flex flex-col gap-1.5">
+                  <label for="lkpd-hots-1" class="text-xs text-slate-200 leading-snug">
+                    <strong class="text-cyan-300">1.</strong> Analisis mengapa peningkatan <strong class="text-white">ketinggian bendungan PLTA</strong> secara signifikan meningkatkan daya listrik yang dihasilkan turbin air!
+                  </label>
+                  <textarea id="lkpd-hots-1" rows="3" placeholder="Hubungkan ketinggian h, Ep air, perubahan menjadi Ek, dan kecepatan putaran turbin..."
+                    class="w-full resize-none bg-slate-950/70 border border-slate-700 rounded-lg px-2.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-400"></textarea>
+                </div>
+
+                <div class="flex flex-col gap-1.5">
+                  <label for="lkpd-hots-2" class="text-xs text-slate-200 leading-snug">
+                    <strong class="text-cyan-300">2.</strong> Bandingkan energi potensial dan kecepatan jatuh benda identik (m &amp; h sama) di <strong class="text-white">Bumi vs Bulan</strong>. Mengapa di Bulan benda melayang jatuh jauh lebih lambat?
+                  </label>
+                  <textarea id="lkpd-hots-2" rows="3" placeholder="Evaluasi perbandingan nilai g Bumi (9.8) vs Bulan (1.62) terhadap Ep dan v..."
+                    class="w-full resize-none bg-slate-950/70 border border-slate-700 rounded-lg px-2.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-400"></textarea>
+                </div>
+              </div>
+
+              <!-- Kesimpulan -->
+              <div class="bg-slate-800/60 border border-emerald-500/40 rounded-2xl p-3 flex flex-col gap-1.5">
+                <label for="lkpd-conclusion" class="text-xs font-extrabold text-emerald-400">✍️ Kesimpulan:</label>
+                <textarea id="lkpd-conclusion" rows="3" placeholder="Tuliskan kesimpulanmu mengenai faktor penentu Ep dan hukum kekekalan energi mekanik..."
+                  class="w-full resize-none bg-slate-950/70 border border-slate-700 rounded-lg px-2.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-400"></textarea>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================== TAB 6: PENGEMBANG (FULL SCROLLABLE) ==================== -->
+      <section id="panel-pengembang" class="tab-panel hidden flex-1 min-h-0 overflow-y-auto p-4 sm:p-6 pb-10 animate-fade-in">
+        <div class="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-12 gap-5 my-auto pt-2">
+          <!-- Kartu Profil Pengembang -->
+          <div class="md:col-span-5 bg-slate-800/60 border border-slate-700/70 rounded-2xl p-6 flex flex-col items-center text-center justify-center">
+            <div class="w-20 h-20 rounded-2xl bg-gradient-to-br from-cyan-500 via-amber-400 to-emerald-500 flex items-center justify-center text-3xl shadow-xl shadow-cyan-500/20 mb-4">
+              ⚡
+            </div>
+            <h2 class="text-lg font-extrabold text-white">Fendy Novafianto, S.Pd.</h2>
+            <p class="text-xs text-cyan-400 font-semibold mt-1">SMAN 1 Boja</p>
+            <div class="mt-4 w-full space-y-2.5 text-left bg-slate-900/75 rounded-xl p-4 border border-slate-700/60 text-xs">
+              <div class="flex justify-between gap-2"><span class="text-slate-400">Nama</span><span class="font-bold text-white text-right">Fendy Novafianto, S.Pd.</span></div>
+              <div class="flex justify-between gap-2"><span class="text-slate-400">Mata Pelajaran</span><span class="font-bold text-white">Fisika</span></div>
+              <div class="flex justify-between gap-2"><span class="text-slate-400">Instansi</span><span class="font-bold text-white">SMAN 1 Boja</span></div>
+              <div class="flex justify-between gap-2"><span class="text-slate-400">Tahun Pembuatan</span><span class="font-mono font-bold text-amber-300">2026</span></div>
+            </div>
+          </div>
+
+          <!-- Kartu Tentang Aplikasi -->
+          <div class="md:col-span-7 bg-slate-800/60 border border-slate-700/70 rounded-2xl p-6 flex flex-col justify-between gap-4">
+            <div>
+              <h3 class="text-base font-extrabold text-white mb-2">Tentang Lab Maya Fisika 3D</h3>
+              <p class="text-xs sm:text-sm text-slate-300 leading-relaxed mb-4">
+                Halo Sobat SMA! Laboratorium maya ini dirancang agar pembelajaran Fisika materi <strong>Energi Potensial Gravitasi</strong> menjadi lebih hidup dan kinestetik. Melalui pelacakan tangan <strong>MediaPipe Hands Line</strong>, siswa dapat mencubit bola dari Rak Bola, memasangnya ke Menara Ukur dengan fitur <em>magnetic snap</em>, dan mengamati kekekalan energi mekanik di 4 planet secara langsung.
+              </p>
+
+              <h4 class="text-xs font-bold uppercase tracking-wider text-cyan-400 mb-2">Fitur &amp; Teknologi</h4>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-slate-200">
+                <div class="bg-slate-900/70 border border-slate-700/60 rounded-xl px-3 py-2">🧊 Three.js WebGL 60 FPS</div>
+                <div class="bg-slate-900/70 border border-slate-700/60 rounded-xl px-3 py-2">🤏 Gestur Cubit MediaPipe Line</div>
+                <div class="bg-slate-900/70 border border-slate-700/60 rounded-xl px-3 py-2">🔊 Efek Suara Web Audio API</div>
+                <div class="bg-slate-900/70 border border-slate-700/60 rounded-xl px-3 py-2">📝 LKPD HOTS &amp; Cetak A4</div>
+              </div>
+            </div>
+
+            <div class="bg-slate-900/80 border border-slate-700/60 rounded-xl p-3 text-[11px] text-slate-400 leading-relaxed">
+              <strong class="text-slate-200">Referensi Kurikulum:</strong> Buku Ilmu Pengetahuan Alam (Fisika) SMA/MA Kelas X Kurikulum Merdeka (Kemendikbudristek) serta Halliday, Resnick &amp; Walker, <em>Fundamentals of Physics</em>.
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- Lembar Khusus Cetak LKPD A4 Portrait -->
+  <div id="print-lkpd-sheet" class="hidden"></div>
+
+  <!-- ==================== JAVASCRIPT: THREE.JS 3D, MEDIAPIPE CUBIT, DRAG 3D, WEB AUDIO & LKPD ==================== -->
+  <script>
+    /**
+     * ============================================================================
+     * 1. KONSTANTA PLANET, POSISI RAK & DATA 6 PERCOBAAN LKPD
+     * ============================================================================
+     */
+    const DOCK_POS = { x: -5.5, y: 1.2 };
+    const SNAP_THRESHOLD_X = 2.2;
+    const GRAB_RADIUS = 2.8;
+
+    const PLANETS = {
+      bumi:    { id: 'bumi',    name: 'Bumi',    g: 9.8,   accentHex: 0x22d3ee, dotColor: '#22d3ee', fogHex: 0x020617 },
+      bulan:   { id: 'bulan',   name: 'Bulan',   g: 1.62,  accentHex: 0x94a3b8, dotColor: '#cbd5e1', fogHex: 0x090d16 },
+      mars:    { id: 'mars',    name: 'Mars',    g: 3.71,  accentHex: 0xf97316, dotColor: '#fb923c', fogHex: 0x160a06 },
+      jupiter: { id: 'jupiter', name: 'Jupiter', g: 24.79, accentHex: 0xf59e0b, dotColor: '#fbbf24', fogHex: 0x140e04 },
+    };
+
+    const LKPD_SLOTS = [
+      { id: 0, title: 'Variasi Massa 1 (Bumi)',  planetHint: 'bumi' },
+      { id: 1, title: 'Variasi Massa 2 (Bumi)',  planetHint: 'bumi' },
+      { id: 2, title: 'Variasi Tinggi 1 (Bumi)', planetHint: 'bumi' },
+      { id: 3, title: 'Variasi Tinggi 2 (Bumi)', planetHint: 'bumi' },
+      { id: 4, title: 'Uji Gravitasi di Bulan',  planetHint: 'bulan' },
+      { id: 5, title: 'Uji Gravitasi di Mars',   planetHint: 'mars' },
+    ];
+
+    /**
+     * ============================================================================
+     * 2. STATE GLOBAL SIMULASI, GESTUR CUBIT & LKPD
+     * ============================================================================
+     */
+    const state = {
+      activeTab: 'simulasi',
+      soundEnabled: true,
+      planet: PLANETS.bumi,
+      mass: 5, // kg (1..10)
+
+      // Status Bola: 'docked' | 'grabbed' | 'mounted' | 'falling' | 'landed' | 'returning'
+      ballStatus: 'docked',
+      ballX: DOCK_POS.x,
+      ballY: DOCK_POS.y, // Posisi vertikal bola di ruang 3D (saat di menara, h = ballY)
+      mountedHeight: 10.0,
+      velocity: 0,
+      impactFlash: 0,
+
+      // Mode Lepas Cubitan: 'mount' (Pasang & Tahan) | 'auto_drop' (Auto-Jatuh)
+      releaseMode: 'mount',
+      isNearTower: false,
+      isHoveringBall: false,
+
+      // MediaPipe State & Kursor 3D
+      mpActive: false,
+      mpLoading: false,
+      mpHandDetected: false,
+      mpPinching: false,
+      mpWasPinching: false,
+      cursorX: DOCK_POS.x,
+      cursorY: 5.0,
+      targetCursorX: DOCK_POS.x,
+      targetCursorY: 5.0,
+      lastTickSound: 0,
+
+      // LKPD State
+      lkpdRows: LKPD_SLOTS.map((slot) => ({
+        id: slot.id,
+        title: slot.title,
+        planetHint: slot.planetHint,
+        recorded: false,
+        planetName: '-',
+        m: null,
+        g: null,
+        h: null,
+        trueEp: null,
+        userEp: '',
+      })),
+      lkpdChecked: false,
+    };
+
+    /**
+     * ============================================================================
+     * 3. ENGINE EFEK SUARA PROSEDURAL (WEB AUDIO API MURNI)
+     * ============================================================================
+     */
+    let audioCtx = null;
+
+    function ensureAudioCtx() {
+      if (!audioCtx) {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (AC) audioCtx = new AC();
+      }
+      if (audioCtx && audioCtx.state === 'suspended') {
+        audioCtx.resume().catch(() => {});
+      }
+    }
+
+    function playTone(freq, duration, type = 'sine', gainVal = 0.08, delay = 0) {
+      if (!state.soundEnabled) return;
+      try {
+        ensureAudioCtx();
+        if (!audioCtx) return;
+        const now = audioCtx.currentTime + delay;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, now);
+        gain.gain.setValueAtTime(0.001, now);
+        gain.gain.exponentialRampToValueAtTime(gainVal, now + 0.01);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start(now);
+        osc.stop(now + duration + 0.02);
+      } catch (e) {}
+    }
+
+    function playImpactSound(energyJoules) {
+      if (!state.soundEnabled) return;
+      try {
+        ensureAudioCtx();
+        if (!audioCtx) return;
+        const intensity = Math.min(1, Math.max(0.2, energyJoules / 1800));
+        const now = audioCtx.currentTime;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(145 + intensity * 65, now);
+        osc.frequency.exponentialRampToValueAtTime(34, now + 0.25);
+        gain.gain.setValueAtTime(0.12 + intensity * 0.16, now);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.28);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start(now);
+        osc.stop(now + 0.3);
+      } catch (e) {}
+    }
+
+    function playWooshSound() {
+      if (!state.soundEnabled) return;
+      try {
+        ensureAudioCtx();
+        if (!audioCtx) return;
+        const now = audioCtx.currentTime;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(540, now);
+        osc.frequency.exponentialRampToValueAtTime(150, now + 0.22);
+        gain.gain.setValueAtTime(0.07, now);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.24);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start(now);
+        osc.stop(now + 0.26);
+      } catch (e) {}
+    }
+
+    function playSFX(type, extra = 0) {
+      if (!state.soundEnabled) return;
+      switch (type) {
+        case 'click':
+          playTone(740, 0.05, 'triangle', 0.06);
+          break;
+        case 'hover':
+          playTone(880, 0.03, 'sine', 0.03);
+          break;
+        case 'grab':
+          playTone(460, 0.06, 'sine', 0.08, 0);
+          playTone(690, 0.08, 'sine', 0.08, 0.04);
+          break;
+        case 'snap':
+          // Klik mekanis elektromagnetik saat bola terpasang di menara
+          playTone(580, 0.05, 'square', 0.05, 0);
+          playTone(980, 0.11, 'triangle', 0.08, 0.045);
+          break;
+        case 'lift':
+          playTone(300 + extra * 22, 0.04, 'sine', 0.04);
+          break;
+        case 'drop':
+          playWooshSound();
+          break;
+        case 'impact':
+          playImpactSound(extra);
+          break;
+        case 'record':
+          playTone(523.25, 0.09, 'sine', 0.07, 0);
+          playTone(659.25, 0.09, 'sine', 0.07, 0.06);
+          playTone(783.99, 0.15, 'sine', 0.08, 0.12);
+          break;
+        case 'success':
+          playTone(523.25, 0.09, 'sine', 0.08, 0);
+          playTone(659.25, 0.09, 'sine', 0.08, 0.07);
+          playTone(783.99, 0.09, 'sine', 0.08, 0.14);
+          playTone(1046.5, 0.24, 'sine', 0.09, 0.21);
+          break;
+        case 'reset':
+          playTone(440, 0.08, 'triangle', 0.06, 0);
+          playTone(329.63, 0.12, 'triangle', 0.06, 0.07);
+          break;
+        case 'start':
+          playTone(440, 0.09, 'sine', 0.07, 0);
+          playTone(554.37, 0.09, 'sine', 0.07, 0.07);
+          playTone(659.25, 0.11, 'sine', 0.08, 0.14);
+          playTone(880, 0.26, 'sine', 0.09, 0.22);
+          break;
+      }
+    }
+
+    function toggleSound() {
+      state.soundEnabled = !state.soundEnabled;
+      const icon = state.soundEnabled ? '🔊' : '🔇';
+      const label = state.soundEnabled ? 'SFX ON' : 'SFX OFF';
+      document.getElementById('sound-icon').textContent = icon;
+      document.getElementById('sound-label').textContent = label;
+      const sIcon = document.getElementById('splash-sound-icon');
+      const sLabel = document.getElementById('splash-sound-label');
+      if (sIcon) sIcon.textContent = icon;
+      if (sLabel) sLabel.textContent = label;
+      if (state.soundEnabled) playSFX('click');
+    }
+
+    function toggleFullscreen() {
+      playSFX('click');
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen?.().catch(() => {});
+      } else {
+        document.exitFullscreen?.().catch(() => {});
+      }
+    }
+
+    /**
+     * ============================================================================
+     * 4. NOTIFIKASI TOAST (Pengganti alert/confirm)
+     * ============================================================================
+     */
+    let toastTimer = null;
+    function showToast(msg, icon = 'ℹ️') {
+      const box = document.getElementById('toast-box');
+      document.getElementById('toast-icon').textContent = icon;
+      document.getElementById('toast-msg').textContent = msg;
+      box.classList.remove('hidden');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => box.classList.add('hidden'), 2600);
+    }
+
+    /**
+     * ============================================================================
+     * 5. NAVIGASI 6 TAB
+     * ============================================================================
+     */
+    function switchTab(tabId) {
+      playSFX('click');
+      state.activeTab = tabId;
+
+      document.querySelectorAll('.tab-panel').forEach((p) => p.classList.add('hidden'));
+      const activePanel = document.getElementById(`panel-${tabId}`);
+      if (activePanel) activePanel.classList.remove('hidden');
+
+      document.querySelectorAll('.tab-btn').forEach((btn) => {
+        btn.classList.remove('bg-cyan-500', 'text-slate-950', 'shadow-md');
+        btn.classList.add('text-slate-300', 'hover:text-white', 'hover:bg-slate-800');
+      });
+
+      const activeBtn = document.getElementById(`tab-btn-${tabId}`);
+      if (activeBtn) {
+        activeBtn.classList.remove('text-slate-300', 'hover:text-white', 'hover:bg-slate-800');
+        activeBtn.classList.add('bg-cyan-500', 'text-slate-950', 'shadow-md');
+      }
+
+      if (tabId === 'simulasi') {
+        setTimeout(resizeThreeViewport, 40);
+      } else if (tabId === 'lkpd') {
+        renderLKPDTable();
+      }
+    }
+
+    /**
+     * ============================================================================
+     * 6. ENGINE 3D THREE.JS (RAK BOLA, MENARA 0–20M, KLEM HOLOGRAFIK, KURSOR 3D)
+     * ============================================================================
+     */
+    let scene, camera, renderer, raycaster;
+    let ballMesh, ballGlowLight, ballHighlightRing;
+    let clampGroup, clampMat, laserLine, laserLabelSprite;
+    let impactPadMat, shockwaveRing, accentLight;
+    let handReticleGroup, reticleOuterMat, reticleInnerMat;
+
+    // Bidang interaksi Z = 0 untuk drag mouse/touch 3D langsung
+    const dragPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
+    const dragIntersectPt = new THREE.Vector3();
+
+    const camCtrl = {
+      yaw: 0.14,
+      pitch: 0.16,
+      targetYaw: 0.14,
+      targetPitch: 0.16,
+      radius: 28.5,
+      targetRadius: 28.5,
+      lookX: -2.0,
+      lookY: 9.2,
+      isDraggingCamera: false,
+      isDraggingBall: false,
+      lastX: 0,
+      lastY: 0,
+    };
+
+    function createTextSprite(text, bgColor = 'rgba(15, 23, 42, 0.88)', borderColor = '#38bdf8', textColor = '#e0f2fe', width = 256, height = 64, scaleW = 4.6, scaleH = 1.15) {
+      const c = document.createElement('canvas');
+      c.width = width;
+      c.height = height;
+      const g = c.getContext('2d');
+      g.fillStyle = bgColor;
+      g.fillRect(4, 6, width - 8, height - 12);
+      g.strokeStyle = borderColor;
+      g.lineWidth = 3;
+      g.strokeRect(4, 6, width - 8, height - 12);
+      g.fillStyle = textColor;
+      g.font = `bold ${Math.round(height * 0.36)}px "JetBrains Mono", monospace`;
+      g.textAlign = 'center';
+      g.textBaseline = 'middle';
+      g.fillText(text, width / 2, height / 2 + 1);
+
+      const tex = new THREE.CanvasTexture(c);
+      const mat = new THREE.SpriteMaterial({ map: tex, transparent: true });
+      const sprite = new THREE.Sprite(mat);
+      sprite.scale.set(scaleW, scaleH, 1);
+      sprite.userData = { canvas: c, ctx: g, tex, bgColor, borderColor, textColor };
+      return sprite;
+    }
+
+    function updateTextSprite(sprite, newText) {
+      if (!sprite || !sprite.userData.ctx) return;
+      const { canvas: c, ctx: g, tex, bgColor, borderColor, textColor } = sprite.userData;
+      g.clearRect(0, 0, c.width, c.height);
+      g.fillStyle = bgColor;
+      g.fillRect(4, 6, c.width - 8, c.height - 12);
+      g.strokeStyle = borderColor;
+      g.lineWidth = 3;
+      g.strokeRect(4, 6, c.width - 8, c.height - 12);
+      g.fillStyle = textColor;
+      g.font = `bold ${Math.round(c.height * 0.38)}px "JetBrains Mono", monospace`;
+      g.textAlign = 'center';
+      g.textBaseline = 'middle';
+      g.fillText(newText, c.width / 2, c.height / 2 + 1);
+      tex.needsUpdate = true;
+    }
+
+    function initThreeEngine() {
+      const container = document.getElementById('three-container');
+      if (!container || typeof THREE === 'undefined') return;
+
+      scene = new THREE.Scene();
+      scene.fog = new THREE.FogExp2(0x020617, 0.013);
+
+      const w = container.clientWidth || 640;
+      const h = container.clientHeight || 420;
+      camera = new THREE.PerspectiveCamera(44, w / h, 0.1, 180);
+
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      renderer.setSize(w, h);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.18;
+      container.innerHTML = '';
+      container.appendChild(renderer.domElement);
+
+      raycaster = new THREE.Raycaster();
+
+      // Pencahayaan Studio Futuristik
+      scene.add(new THREE.AmbientLight(0xcbd5e1, 0.7));
+
+      const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
+      dirLight.position.set(14, 28, 18);
+      scene.add(dirLight);
+
+      accentLight = new THREE.PointLight(0x22d3ee, 2.2, 65);
+      accentLight.position.set(-12, 16, 12);
+      scene.add(accentLight);
+
+      // Lantai & Grid Lab
+      const grid = new THREE.GridHelper(44, 28, 0x22d3ee, 0x1e293b);
+      scene.add(grid);
+
+      const floorMesh = new THREE.Mesh(
+        new THREE.PlaneGeometry(52, 52),
+        new THREE.MeshStandardMaterial({ color: 0x0b1220, roughness: 0.85, metalness: 0.2 })
+      );
+      floorMesh.rotation.x = -Math.PI / 2;
+      floorMesh.position.y = -0.02;
+      scene.add(floorMesh);
+
+      // ---------- ZONA A: RAK BOLA / DOCK BOLA (x = -5.5, y = 1.2) ----------
+      const dockGroup = new THREE.Group();
+      dockGroup.position.set(DOCK_POS.x, 0, 0);
+
+      // Pedestal alas rak
+      const dockPedestal = new THREE.Mesh(
+        new THREE.CylinderGeometry(1.75, 2.05, 1.0, 28),
+        new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.65, roughness: 0.35 })
+      );
+      dockPedestal.position.y = 0.5;
+      dockGroup.add(dockPedestal);
+
+      // Cincin neon menyala pada Rak Bola
+      const dockNeonRing = new THREE.Mesh(
+        new THREE.TorusGeometry(1.55, 0.1, 12, 36),
+        new THREE.MeshStandardMaterial({ color: 0xf59e0b, emissive: 0xd97706, emissiveIntensity: 0.8 })
+      );
+      dockNeonRing.rotation.x = Math.PI / 2;
+      dockNeonRing.position.y = 1.05;
+      dockGroup.add(dockNeonRing);
+
+      // Label 3D "RAK BOLA — CUBIT UNTUK AMBIL"
+      const dockLabel = createTextSprite(
+        'RAK BOLA — CUBIT UNTUK AMBIL',
+        'rgba(15, 23, 42, 0.92)',
+        '#f59e0b',
+        '#fde047',
+        420,
+        64,
+        6.0,
+        0.92
+      );
+      dockLabel.position.set(0, 3.3, 0);
+      dockGroup.add(dockLabel);
+      scene.add(dockGroup);
+
+      // ---------- ZONA B: MENARA UKUR & ZONA PASANG (x = 0, tinggi 0–20 m) ----------
+      // Impact Pad di dasar menara (x = 0, y = 0)
+      impactPadMat = new THREE.MeshStandardMaterial({
+        color: 0x10b981,
+        emissive: 0x059669,
+        emissiveIntensity: 0.55,
+        roughness: 0.3,
+        metalness: 0.5,
+      });
+      const padBase = new THREE.Mesh(
+        new THREE.CylinderGeometry(2.5, 2.9, 0.24, 32),
+        new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.6, roughness: 0.35 })
+      );
+      padBase.position.y = 0.12;
+      scene.add(padBase);
+
+      const padRing = new THREE.Mesh(new THREE.TorusGeometry(2.1, 0.12, 12, 36), impactPadMat);
+      padRing.rotation.x = Math.PI / 2;
+      padRing.position.y = 0.26;
+      scene.add(padRing);
+
+      // Shockwave Ring saat bola menghantam landasan
+      shockwaveRing = new THREE.Mesh(
+        new THREE.RingGeometry(1.6, 2.2, 40),
+        new THREE.MeshBasicMaterial({ color: 0x38bdf8, side: THREE.DoubleSide, transparent: true, opacity: 0 })
+      );
+      shockwaveRing.rotation.x = -Math.PI / 2;
+      shockwaveRing.position.y = 0.28;
+      scene.add(shockwaveRing);
+
+      // Tiang Menara Ukur (di belakang sumbu jatuh: x = 2.6 agar bola jatuh bebas di x = 0)
+      const towerGroup = new THREE.Group();
+      const pillarMat = new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.65, roughness: 0.3 });
+      const pillar = new THREE.Mesh(new THREE.BoxGeometry(0.6, 20.8, 0.6), pillarMat);
+      pillar.position.set(2.8, 10.4, 0);
+      towerGroup.add(pillar);
+
+      // Rel neon vertikal pada menara
+      const rail = new THREE.Mesh(
+        new THREE.BoxGeometry(0.14, 20.2, 0.14),
+        new THREE.MeshBasicMaterial({ color: 0x22d3ee })
+      );
+      rail.position.set(2.45, 10.1, 0);
+      towerGroup.add(rail);
+
+      // Garis panduan vertikal holografik di sumbu x = 0 (zona magnetis)
+      const guideLine = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.035, 0.035, 20.2, 8),
+        new THREE.MeshBasicMaterial({ color: 0x22d3ee, transparent: true, opacity: 0.22 })
+      );
+      guideLine.position.set(0, 10.2, 0);
+      towerGroup.add(guideLine);
+
+      // Penanda Skala Meteran (setiap 2 m, label setiap 5 m)
+      const tickMat = new THREE.MeshBasicMaterial({ color: 0x7dd3fc });
+      for (let m = 0; m <= 20; m += 2) {
+        const isMajor = m % 5 === 0;
+        const tick = new THREE.Mesh(new THREE.BoxGeometry(isMajor ? 0.9 : 0.45, 0.08, 0.12), tickMat);
+        tick.position.set(2.0, m + 0.24, 0);
+        towerGroup.add(tick);
+      }
+      for (let m = 0; m <= 20; m += 5) {
+        const lbl = createTextSprite(`${m} m`, 'rgba(15, 23, 42, 0.85)', '#38bdf8', '#e0f2fe', 128, 56, 2.2, 0.96);
+        lbl.position.set(4.5, m + 0.3, 0);
+        towerGroup.add(lbl);
+      }
+      scene.add(towerGroup);
+
+      // Pengait / Klem Elektromagnetik Holografik di Menara
+      clampGroup = new THREE.Group();
+      clampMat = new THREE.MeshStandardMaterial({
+        color: 0x22d3ee,
+        emissive: 0x06b6d4,
+        emissiveIntensity: 0.75,
+        transparent: true,
+        opacity: 0.85,
+        metalness: 0.5,
+        roughness: 0.2,
+      });
+      // Lengan pengait dari menara (x = 2.45) ke sumbu bola (x = 0)
+      const clampArm = new THREE.Mesh(new THREE.BoxGeometry(2.45, 0.18, 0.22), clampMat);
+      clampArm.position.set(1.22, 0, 0);
+      clampGroup.add(clampArm);
+
+      // Cincin klem holografik mengelilingi sumbu bola (x = 0)
+      const clampRing = new THREE.Mesh(new THREE.TorusGeometry(1.38, 0.085, 10, 32), clampMat);
+      clampRing.rotation.x = Math.PI / 2;
+      clampGroup.add(clampRing);
+
+      clampGroup.position.set(0, 10.24, 0);
+      clampGroup.visible = false;
+      scene.add(clampGroup);
+
+      // Garis Laser Ketinggian Horizontal & Label h Real-Time
+      const laserGeo = new THREE.CylinderGeometry(0.04, 0.04, 2.6, 8);
+      laserGeo.rotateZ(Math.PI / 2);
+      laserLine = new THREE.Mesh(
+        laserGeo,
+        new THREE.MeshBasicMaterial({ color: 0xfacc15, transparent: true, opacity: 0.85 })
+      );
+      laserLine.position.set(1.3, 10.24, 0);
+      laserLine.visible = false;
+      scene.add(laserLine);
+
+      laserLabelSprite = createTextSprite('h = 10.0 m', 'rgba(15, 23, 42, 0.92)', '#facc15', '#fef08a', 200, 56, 3.2, 0.9);
+      laserLabelSprite.position.set(4.5, 10.24, 0.5);
+      laserLabelSprite.visible = false;
+      scene.add(laserLabelSprite);
+
+      // ---------- BOLA LOGAM 3D & HIGHLIGHT ----------
+      const ballGeo = new THREE.SphereGeometry(1.0, 36, 36);
+      const ballMat = new THREE.MeshStandardMaterial({
+        color: 0xf59e0b,
+        emissive: 0xb45309,
+        emissiveIntensity: 0.35,
+        metalness: 0.72,
+        roughness: 0.22,
+      });
+      ballMesh = new THREE.Mesh(ballGeo, ballMat);
+      scene.add(ballMesh);
+
+      ballHighlightRing = new THREE.Mesh(
+        new THREE.TorusGeometry(1.32, 0.06, 10, 32),
+        new THREE.MeshBasicMaterial({ color: 0xfef08a, transparent: true, opacity: 0 })
+      );
+      scene.add(ballHighlightRing);
+
+      ballGlowLight = new THREE.PointLight(0xfbbf24, 1.5, 16);
+      scene.add(ballGlowLight);
+
+      // ---------- KURSOR TANGAN 3D (3D HAND RETICLE UNTUK MEDIAPIPE) ----------
+      handReticleGroup = new THREE.Group();
+      reticleOuterMat = new THREE.MeshBasicMaterial({ color: 0x22d3ee, transparent: true, opacity: 0.9, side: THREE.DoubleSide });
+      reticleInnerMat = new THREE.MeshBasicMaterial({ color: 0x34d399, transparent: true, opacity: 0.85 });
+
+      const reticleOuter = new THREE.Mesh(new THREE.RingGeometry(0.68, 0.84, 32), reticleOuterMat);
+      const reticleDot = new THREE.Mesh(new THREE.SphereGeometry(0.18, 16, 16), reticleInnerMat);
+      handReticleGroup.add(reticleOuter, reticleDot);
+      handReticleGroup.position.set(DOCK_POS.x, 5.0, 1.2);
+      handReticleGroup.visible = false;
+      scene.add(handReticleGroup);
+
+      // ---------- EVENT MOUSE / TOUCH: DRAG BOLA LANGSUNG ATAU PUTAR KAMERA ----------
+      const domEl = renderer.domElement;
+
+      function getPointerNDC(e) {
+        const rect = domEl.getBoundingClientRect();
+        return new THREE.Vector2(
+          ((e.clientX - rect.left) / rect.width) * 2 - 1,
+          -((e.clientY - rect.top) / rect.height) * 2 + 1
+        );
+      }
+
+      domEl.addEventListener('pointerdown', (e) => {
+        const ndc = getPointerNDC(e);
+        raycaster.setFromCamera(ndc, camera);
+        const hits = raycaster.intersectObject(ballMesh, false);
+
+        if (hits.length > 0 && state.ballStatus !== 'falling') {
+          // Mulai drag bola 3D langsung (cadangan setara gestur cubit!)
+          camCtrl.isDraggingBall = true;
+          state.ballStatus = 'grabbed';
+          state.velocity = 0;
+          playSFX('grab');
+          updateBallStatusHUD('✋ Menyeret Bola — Arahkan ke Menara Ukur!', 'amber');
+        } else {
+          camCtrl.isDraggingCamera = true;
+          camCtrl.lastX = e.clientX;
+          camCtrl.lastY = e.clientY;
+        }
+      });
+
+      window.addEventListener('pointermove', (e) => {
+        if (camCtrl.isDraggingBall) {
+          const ndc = getPointerNDC(e);
+          raycaster.setFromCamera(ndc, camera);
+          if (raycaster.ray.intersectPlane(dragPlane, dragIntersectPt)) {
+            moveGrabbedBallTo(dragIntersectPt.x, dragIntersectPt.y);
+          }
+          return;
+        }
+
+        if (!camCtrl.isDraggingCamera) return;
+        const dx = e.clientX - camCtrl.lastX;
+        const dy = e.clientY - camCtrl.lastY;
+        camCtrl.lastX = e.clientX;
+        camCtrl.lastY = e.clientY;
+        camCtrl.targetYaw -= dx * 0.008;
+        camCtrl.targetPitch = Math.max(0.05, Math.min(1.1, camCtrl.targetPitch + dy * 0.008));
+      });
+
+      window.addEventListener('pointerup', () => {
+        if (camCtrl.isDraggingBall) {
+          camCtrl.isDraggingBall = false;
+          releaseGrabbedBall();
+        }
+        camCtrl.isDraggingCamera = false;
+      });
+
+      domEl.addEventListener(
+        'wheel',
+        (e) => {
+          e.preventDefault();
+          camCtrl.targetRadius = Math.max(16, Math.min(44, camCtrl.targetRadius + (e.deltaY > 0 ? 1.8 : -1.8)));
+        },
+        { passive: false }
+      );
+
+      syncBallVisual();
+    }
+
+    function resizeThreeViewport() {
+      const container = document.getElementById('three-container');
+      if (!container || !renderer || !camera) return;
+      const w = container.clientWidth;
+      const h = container.clientHeight;
+      if (w === 0 || h === 0) return;
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+      renderer.setSize(w, h);
+    }
+
+    function resetCamera() {
+      playSFX('click');
+      camCtrl.targetYaw = 0.14;
+      camCtrl.targetPitch = 0.16;
+      camCtrl.targetRadius = 28.5;
+    }
+
+    function getBallRadius() {
+      return 0.62 + (state.mass - 1) * 0.085;
+    }
+
+    /**
+     * ============================================================================
+     * 7. LOGIKA INTI MEMASANG BOLA (GRAB -> MAGNETIC SNAP -> PASANG / AUTO-JATUH)
+     * ============================================================================
+     */
+    function moveGrabbedBallTo(rawX, rawY) {
+      const clampedX = Math.max(-7.5, Math.min(3.5, rawX));
+      const clampedY = Math.max(0.5, Math.min(20.0, rawY));
+
+      // Cek apakah mendekati sumbu Menara Ukur (|x| < 2.2) -> Magnetic Snap!
+      if (Math.abs(clampedX) < SNAP_THRESHOLD_X) {
+        state.isNearTower = true;
+        state.ballX += (0 - state.ballX) * 0.45; // Snap magnetis halus ke x = 0
+        state.ballY = clampedY;
+        state.mountedHeight = Number(clampedY.toFixed(1));
+
+        // Sinkronkan slider ketinggian
+        document.getElementById('slider-height').value = Math.round(clampedY * 2) / 2;
+        document.getElementById('lbl-height').textContent = `${state.mountedHeight.toFixed(1)} m`;
+
+        if (performance.now() - state.lastTickSound > 150) {
+          playSFX('lift', state.mountedHeight);
+          state.lastTickSound = performance.now();
+        }
+
+        updateBallStatusHUD(
+          state.releaseMode === 'mount'
+            ? `🧲 Zona Menara (h = ${state.mountedHeight.toFixed(1)} m) — Lepas cubitan untuk PASANG!`
+            : `🧲 Zona Menara (h = ${state.mountedHeight.toFixed(1)} m) — Lepas cubitan untuk JATUH!`,
+          'cyan'
+        );
+      } else {
+        state.isNearTower = false;
+        state.ballX = clampedX;
+        state.ballY = clampedY;
+        updateBallStatusHUD('🤏 Bola Diambil — Geser ke kanan menuju Menara Ukur!', 'amber');
+      }
+
+      syncBallVisual();
+      updateEnergyReadouts();
+    }
+
+    function releaseGrabbedBall() {
+      if (state.ballStatus !== 'grabbed') return;
+
+      if (Math.abs(state.ballX) < SNAP_THRESHOLD_X && state.ballY >= 0.5) {
+        // Berada di Zona Menara Ukur!
+        state.ballX = 0;
+        state.mountedHeight = Number(Math.max(0.5, Math.min(20.0, state.ballY)).toFixed(1));
+        state.ballY = state.mountedHeight;
+
+        if (state.releaseMode === 'mount') {
+          // Mode Pasang & Tahan (Default)
+          state.ballStatus = 'mounted';
+          state.velocity = 0;
+          playSFX('snap');
+          updateBallStatusHUD(`📌 BOLA TERPASANG di h = ${state.mountedHeight.toFixed(1)} m`, 'emerald');
+          showToast(`Bola terpasang di menara pada ketinggian ${state.mountedHeight.toFixed(1)} m!`, '📌');
+        } else {
+          // Mode Auto-Jatuh
+          state.ballStatus = 'falling';
+          state.velocity = 0;
+          playSFX('drop');
+          updateBallStatusHUD('⚡ Bola Dilepas — Jatuh Bebas!', 'cyan');
+        }
+      } else {
+        // Dilepas di luar zona menara -> kembali mulus ke Rak Bola
+        state.ballStatus = 'returning';
+        state.isNearTower = false;
+        playSFX('click');
+        updateBallStatusHUD('📦 Dilepas di luar menara — Kembali ke Rak Bola', 'amber');
+      }
+
+      syncBallVisual();
+      updateEnergyReadouts();
+    }
+
+    function updateBallStatusHUD(text, tone = 'amber') {
+      const el = document.getElementById('ball-status-hud');
+      if (!el) return;
+      el.textContent = text;
+      const styles = {
+        amber: 'px-3 py-1 rounded-xl bg-slate-900/90 border border-amber-400/50 text-[11px] font-bold text-amber-300 backdrop-blur-md shadow',
+        cyan: 'px-3 py-1 rounded-xl bg-slate-900/90 border border-cyan-400/60 text-[11px] font-bold text-cyan-300 backdrop-blur-md shadow',
+        emerald: 'px-3 py-1 rounded-xl bg-emerald-950/90 border border-emerald-400/60 text-[11px] font-extrabold text-emerald-300 backdrop-blur-md shadow',
+      };
+      el.className = styles[tone] || styles.amber;
+    }
+
+    function syncBallVisual() {
+      if (!ballMesh) return;
+      const r = getBallRadius();
+      ballMesh.scale.set(r, r, r);
+
+      // Posisi vertikal pusat bola
+      let centerY;
+      if (state.ballStatus === 'docked') {
+        centerY = 1.08 + r; // Duduk pas di atas Rak Bola
+      } else {
+        centerY = 0.24 + r + state.ballY;
+      }
+      ballMesh.position.set(state.ballX, centerY, 0);
+      ballGlowLight.position.set(state.ballX, centerY, 0);
+
+      // Highlight ring saat kursor MediaPipe dekat atau sedang dicubit
+      if (ballHighlightRing) {
+        ballHighlightRing.position.copy(ballMesh.position);
+        ballHighlightRing.scale.set(r * 1.15, r * 1.15, 1);
+        ballHighlightRing.lookAt(camera.position);
+        ballHighlightRing.material.opacity = (state.isHoveringBall || state.ballStatus === 'grabbed') ? 0.9 : 0;
+      }
+
+      // Kecerahan cahaya bola proporsional terhadap Ep saat di menara
+      const activeH = (state.ballStatus === 'docked' || state.ballStatus === 'returning') ? 0 : Math.max(0, state.ballY);
+      const ep = state.mass * state.planet.g * activeH;
+      const glowFactor = Math.min(1.2, ep / 1600);
+      ballMesh.material.emissiveIntensity = (state.isHoveringBall || state.ballStatus === 'grabbed')
+        ? 0.85
+        : (0.2 + glowFactor * 0.85);
+      ballGlowLight.intensity = 0.7 + glowFactor * 2.2;
+
+      // Klem Elektromagnetik & Laser Ketinggian di Menara
+      const showTowerClamp = state.ballStatus === 'mounted' || (state.ballStatus === 'grabbed' && state.isNearTower);
+      if (clampGroup && laserLine && laserLabelSprite) {
+        clampGroup.visible = showTowerClamp;
+        laserLine.visible = showTowerClamp || state.ballStatus === 'falling';
+        laserLabelSprite.visible = showTowerClamp;
+
+        const scaleY = 0.24 + Math.max(0, state.ballY);
+        clampGroup.position.y = centerY;
+        laserLine.position.y = scaleY;
+        laserLabelSprite.position.y = scaleY;
+
+        if (showTowerClamp) {
+          clampMat.color.setHex(state.ballStatus === 'mounted' ? 0x10b981 : 0x22d3ee);
+          clampMat.emissive.setHex(state.ballStatus === 'mounted' ? 0x059669 : 0x0891b2);
+          updateTextSprite(laserLabelSprite, `h = ${Math.max(0, state.ballY).toFixed(1)} m`);
+        }
+      }
+    }
+
+    /**
+     * ============================================================================
+     * 8. KONTROL PANEL KANAN (MODE LEPAS, PLANET, SLIDER, JATUH, RAK, RESET)
+     * ============================================================================
+     */
+    function setReleaseMode(mode) {
+      playSFX('click');
+      state.releaseMode = mode;
+      const btnMount = document.getElementById('mode-btn-mount');
+      const btnDrop = document.getElementById('mode-btn-drop');
+
+      if (mode === 'mount') {
+        btnMount.className = 'py-1.5 px-2 rounded-lg border text-[10px] font-extrabold transition cursor-pointer bg-emerald-500/20 border-emerald-400 text-emerald-200';
+        btnDrop.className = 'py-1.5 px-2 rounded-lg border text-[10px] font-bold transition cursor-pointer bg-slate-900/80 hover:bg-slate-800 border-slate-700 text-slate-300';
+        showToast('Mode Pasang & Tahan: Lepas cubitan di menara akan mengunci bola.', '📌');
+      } else {
+        btnDrop.className = 'py-1.5 px-2 rounded-lg border text-[10px] font-extrabold transition cursor-pointer bg-amber-500/20 border-amber-400 text-amber-200';
+        btnMount.className = 'py-1.5 px-2 rounded-lg border text-[10px] font-bold transition cursor-pointer bg-slate-900/80 hover:bg-slate-800 border-slate-700 text-slate-300';
+        showToast('Mode Auto-Jatuh: Lepas cubitan di menara langsung menjatuhkan bola!', '⚡');
+      }
+    }
+
+    function selectPlanet(planetId) {
+      if (!PLANETS[planetId]) return;
+      playSFX('click');
+      state.planet = PLANETS[planetId];
+
+      Object.keys(PLANETS).forEach((id) => {
+        const btn = document.getElementById(`pbtn-${id}`);
+        if (!btn) return;
+        btn.className = id === planetId
+          ? 'px-2.5 py-1.5 rounded-xl border text-left transition cursor-pointer bg-cyan-500/20 border-cyan-400 text-white shadow-sm'
+          : 'px-2.5 py-1.5 rounded-xl border text-left transition cursor-pointer bg-slate-900/70 hover:bg-slate-800 border-slate-700 text-slate-300';
+      });
+
+      if (accentLight) accentLight.color.setHex(state.planet.accentHex);
+      if (scene && scene.fog) scene.fog.color.setHex(state.planet.fogHex);
+
+      document.getElementById('sim-planet-label').textContent = state.planet.name;
+      document.getElementById('sim-gravity-badge').textContent = `g = ${state.planet.g.toFixed(2)} m/s²`;
+      document.getElementById('sim-planet-dot').style.backgroundColor = state.planet.dotColor;
+
+      syncBallVisual();
+      updateEnergyReadouts();
+      showToast(`Lingkungan gravitasi diubah ke ${state.planet.name} (g = ${state.planet.g} m/s²).`, '🪐');
+    }
+
+    function onMassSlider(val) {
+      state.mass = Number(val);
+      document.getElementById('lbl-mass').textContent = `${state.mass} kg`;
+      playSFX('click');
+      syncBallVisual();
+      updateEnergyReadouts();
+    }
+
+    function onHeightSlider(val) {
+      const h = Number(val);
+      state.mountedHeight = h;
+      state.ballX = 0;
+      state.ballY = h;
+      state.ballStatus = 'mounted';
+      state.velocity = 0;
+      document.getElementById('lbl-height').textContent = `${h.toFixed(1)} m`;
+      playSFX('lift', h);
+      updateBallStatusHUD(`📌 BOLA TERPASANG di h = ${h.toFixed(1)} m`, 'emerald');
+      syncBallVisual();
+      updateEnergyReadouts();
+    }
+
+    function dropBall() {
+      if (state.ballStatus === 'docked' || state.ballStatus === 'returning') {
+        showToast('Pasang bola ke Menara Ukur terlebih dahulu (cubit / seret atau gunakan slider ketinggian)!', '⚠️');
+        playSFX('click');
+        return;
+      }
+      if (state.ballStatus === 'landed' || state.ballY <= 0.1) {
+        showToast('Bola sudah di landasan bawah! Cubit lagi atau pasang ulang di Menara.', '⚠️');
+        playSFX('click');
+        return;
+      }
+      state.ballX = 0;
+      state.mountedHeight = state.ballY;
+      state.velocity = 0;
+      state.ballStatus = 'falling';
+      playSFX('drop');
+      updateBallStatusHUD('⚡ Bola Jatuh Bebas menuju Impact Pad!', 'cyan');
+    }
+
+    function returnBallToDock() {
+      playSFX('click');
+      state.ballStatus = 'returning';
+      state.velocity = 0;
+      state.isNearTower = false;
+      updateBallStatusHUD('📦 Bola dikembalikan ke Rak — Cubit untuk mengambil!', 'amber');
+      updateEnergyReadouts();
+    }
+
+    function resetSimulation() {
+      playSFX('reset');
+      state.mass = 5;
+      state.mountedHeight = 10.0;
+      state.velocity = 0;
+      state.ballX = DOCK_POS.x;
+      state.ballY = DOCK_POS.y;
+      state.ballStatus = 'docked';
+      state.isNearTower = false;
+      document.getElementById('slider-mass').value = 5;
+      document.getElementById('lbl-mass').textContent = '5 kg';
+      document.getElementById('slider-height').value = 10;
+      document.getElementById('lbl-height').textContent = '10.0 m';
+      selectPlanet('bumi');
+      resetCamera();
+      updateBallStatusHUD('📦 Bola di Rak — Cubit / Seret ke Menara!', 'amber');
+      syncBallVisual();
+      updateEnergyReadouts();
+      showToast('Simulasi direset. Bola kembali ke Rak Bola!', '🔄');
+    }
+
+    function updateEnergyReadouts() {
+      const m = state.mass;
+      const g = state.planet.g;
+      const onTower = state.ballStatus === 'mounted' || state.ballStatus === 'falling' || state.ballStatus === 'landed' || (state.ballStatus === 'grabbed' && state.isNearTower);
+      const h = onTower ? Math.max(0, state.ballY) : 0;
+      const v = state.velocity;
+
+      const ep = m * g * h;
+      const ek = 0.5 * m * v * v;
+      const em = ep + ek;
+      const maxScale = Math.max(1, m * g * Math.max(state.mountedHeight, h, 1));
+
+      document.getElementById('obs-h').textContent = `${h.toFixed(2)} m`;
+      document.getElementById('obs-v').textContent = `${v.toFixed(2)} m/s`;
+      document.getElementById('obs-ep').textContent = `${ep.toFixed(1)} J`;
+      document.getElementById('obs-ek').textContent = `${ek.toFixed(1)} J`;
+
+      document.getElementById('bar-ep-val').textContent = `${ep.toFixed(1)} J`;
+      document.getElementById('bar-ek-val').textContent = `${ek.toFixed(1)} J`;
+      document.getElementById('bar-em-val').textContent = `${em.toFixed(1)} J`;
+
+      document.getElementById('bar-ep-fill').style.width = `${Math.min(100, (ep / maxScale) * 100)}%`;
+      document.getElementById('bar-ek-fill').style.width = `${Math.min(100, (ek / maxScale) * 100)}%`;
+      document.getElementById('bar-em-fill').style.width = `${Math.min(100, (em / maxScale) * 100)}%`;
+    }
+
+    /**
+     * ============================================================================
+     * 9. LOOP ANIMASI 60 FPS THREE.JS + FISIKA JATUH BEBAS + KURSOR TANGAN 3D
+     * ============================================================================
+     */
+    let lastFrameTime = performance.now();
+
+    function animate(now) {
+      requestAnimationFrame(animate);
+      const dt = Math.min(0.05, (now - lastFrameTime) / 1000);
+      lastFrameTime = now;
+
+      // 1. Animasi Bola Kembali Mulus ke Rak Bola
+      if (state.ballStatus === 'returning') {
+        state.ballX += (DOCK_POS.x - state.ballX) * 0.14;
+        state.ballY += (DOCK_POS.y - state.ballY) * 0.14;
+        if (Math.hypot(state.ballX - DOCK_POS.x, state.ballY - DOCK_POS.y) < 0.08) {
+          state.ballX = DOCK_POS.x;
+          state.ballY = DOCK_POS.y;
+          state.ballStatus = 'docked';
+          updateBallStatusHUD('📦 Bola di Rak — Cubit / Seret ke Menara!', 'amber');
+        }
+        syncBallVisual();
+      }
+
+      // 2. Fisika Jatuh Bebas Akurat (v = gt, y = h - 1/2 gt^2)
+      if (state.ballStatus === 'falling') {
+        const g = state.planet.g;
+        state.velocity += g * dt;
+        state.ballY -= state.velocity * dt;
+
+        if (state.ballY <= 0) {
+          state.ballY = 0;
+          const impactV = Math.sqrt(2 * g * state.mountedHeight);
+          state.velocity = impactV;
+          state.ballStatus = 'landed';
+          const impactEk = 0.5 * state.mass * impactV * impactV;
+          state.impactFlash = 1.0;
+          playSFX('impact', impactEk);
+          updateBallStatusHUD(`💥 Mendarat! Ek = ${impactEk.toFixed(1)} J — Cubit / Kembalikan ke Rak`, 'emerald');
+        }
+        syncBallVisual();
+        updateEnergyReadouts();
+      }
+
+      // 3. Animasi Shockwave Impact Pad
+      if (state.impactFlash > 0 && shockwaveRing) {
+        state.impactFlash = Math.max(0, state.impactFlash - dt * 1.9);
+        const prog = 1 - state.impactFlash;
+        const sc = 1 + prog * 3.8;
+        shockwaveRing.scale.set(sc, sc, 1);
+        shockwaveRing.material.opacity = state.impactFlash * 0.85;
+        if (impactPadMat) impactPadMat.emissiveIntensity = 0.55 + state.impactFlash * 2.2;
+      }
+
+      // 4. Smoothing Kursor Tangan 3D MediaPipe
+      if (handReticleGroup) {
+        handReticleGroup.visible = state.mpActive && state.mpHandDetected;
+        if (handReticleGroup.visible) {
+          state.cursorX += (state.targetCursorX - state.cursorX) * 0.28;
+          state.cursorY += (state.targetCursorY - state.cursorY) * 0.28;
+          handReticleGroup.position.set(state.cursorX, state.cursorY, 1.35);
+          handReticleGroup.lookAt(camera.position);
+
+          const col = state.mpPinching ? 0xfacc15 : 0x22d3ee;
+          reticleOuterMat.color.setHex(col);
+          reticleInnerMat.color.setHex(state.mpPinching ? 0xfef08a : 0x34d399);
+          const rScale = state.mpPinching ? 0.78 : 1.05;
+          handReticleGroup.scale.set(rScale, rScale, 1);
+        }
+      }
+
+      // 5. Smooth Damping Kamera 3D
+      if (camera && renderer && scene) {
+        camCtrl.yaw += (camCtrl.targetYaw - camCtrl.yaw) * 0.12;
+        camCtrl.pitch += (camCtrl.targetPitch - camCtrl.pitch) * 0.12;
+        camCtrl.radius += (camCtrl.targetRadius - camCtrl.radius) * 0.12;
+
+        camera.position.x = camCtrl.lookX + camCtrl.radius * Math.sin(camCtrl.yaw) * Math.cos(camCtrl.pitch);
+        camera.position.y = camCtrl.lookY + camCtrl.radius * Math.sin(camCtrl.pitch);
+        camera.position.z = camCtrl.radius * Math.cos(camCtrl.yaw) * Math.cos(camCtrl.pitch);
+        camera.lookAt(camCtrl.lookX, camCtrl.lookY, 0);
+
+        renderer.render(scene, camera);
+      }
+    }
+
+    /**
+     * ============================================================================
+     * 10. MEDIAPIPE HANDS LINE TRACKING (KURSOR 3D + CUBIT AMBIL & PASANG BOLA)
+     * ============================================================================
+     */
+    let mpHandsInstance = null;
+    let mpStream = null;
+    let mpLoopId = null;
+
+    async function toggleMediaPipe() {
+      playSFX('click');
+      if (state.mpActive) {
+        stopMediaPipe();
+        return;
+      }
+      if (state.mpLoading) return;
+
+      if (typeof Hands === 'undefined') {
+        showToast('Library MediaPipe belum siap. Gunakan drag mouse 3D atau slider manual.', '⚠️');
+        return;
+      }
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        showToast('Kamera tidak didukung di browser ini. Gunakan drag mouse 3D!', '⚠️');
+        return;
+      }
+
+      state.mpLoading = true;
+      updateMediaPipeUI('Memuat kamera...');
+
+      try {
+        mpStream = await navigator.mediaDevices.getUserMedia({
+          video: { width: 320, height: 240, facingMode: 'user' },
+          audio: false,
+        });
+
+        const videoEl = document.getElementById('mp-video');
+        videoEl.srcObject = mpStream;
+        await videoEl.play();
+
+        if (!mpHandsInstance) {
+          mpHandsInstance = new Hands({
+            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`,
+          });
+          mpHandsInstance.setOptions({
+            maxNumHands: 1,
+            modelComplexity: 1,
+            minDetectionConfidence: 0.65,
+            minTrackingConfidence: 0.6,
+          });
+          mpHandsInstance.onResults(onMediaPipeResults);
+        }
+
+        state.mpActive = true;
+        state.mpLoading = false;
+        state.mpWasPinching = false;
+        document.getElementById('mp-hud-box').classList.remove('hidden');
+        updateMediaPipeUI('Aktif');
+        showToast('MediaPipe Line aktif! Arahkan kursor 3D ke Rak Bola lalu CUBIT untuk mengambil!', '📷');
+
+        const processFrame = async () => {
+          if (!state.mpActive) return;
+          if (videoEl.readyState >= 2 && mpHandsInstance) {
+            try {
+              await mpHandsInstance.send({ image: videoEl });
+            } catch (err) {}
+          }
+          mpLoopId = requestAnimationFrame(processFrame);
+        };
+        mpLoopId = requestAnimationFrame(processFrame);
+      } catch (err) {
+        state.mpLoading = false;
+        state.mpActive = false;
+        stopMediaPipe(true);
+        showToast('Akses kamera ditolak/tidak tersedia. Gunakan drag mouse 3D di layar!', '⚠️');
+      }
+    }
+
+    function stopMediaPipe(silent = false) {
+      state.mpActive = false;
+      state.mpLoading = false;
+      state.mpHandDetected = false;
+      state.mpPinching = false;
+      state.mpWasPinching = false;
+      state.isHoveringBall = false;
+      if (mpLoopId) cancelAnimationFrame(mpLoopId);
+      if (mpStream) {
+        mpStream.getTracks().forEach((t) => t.stop());
+        mpStream = null;
+      }
+      document.getElementById('mp-hud-box').classList.add('hidden');
+      updateMediaPipeUI('Standby');
+      syncBallVisual();
+      if (!silent) showToast('Kamera MediaPipe Line dimatikan.', '📷');
+    }
+
+    function updateMediaPipeUI(statusText) {
+      const btn = document.getElementById('btn-mediapipe');
+      const lbl = document.getElementById('mp-btn-label');
+      const pill = document.getElementById('mp-status-pill');
+
+      if (state.mpActive) {
+        btn.className = 'w-full py-2 px-3 rounded-xl border font-extrabold text-xs transition-all cursor-pointer flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 border-emerald-300 text-slate-950 shadow-lg shadow-emerald-500/20';
+        lbl.textContent = 'MediaPipe Line: ON';
+        pill.textContent = statusText;
+        pill.className = 'text-[9px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/50';
+      } else {
+        btn.className = 'w-full py-2 px-3 rounded-xl border font-extrabold text-xs transition-all cursor-pointer flex items-center justify-center gap-2 bg-slate-900/90 hover:bg-slate-800 border-cyan-500/50 text-cyan-300 shadow';
+        lbl.textContent = state.mpLoading ? 'Menghubungkan...' : 'MediaPipe Line: OFF';
+        pill.textContent = statusText;
+        pill.className = 'text-[9px] font-bold px-2 py-0.5 rounded-full bg-slate-900 text-slate-400 border border-slate-700';
+      }
+    }
+
+    function onMediaPipeResults(results) {
+      if (!state.mpActive) return;
+      const mpCanvas = document.getElementById('mp-canvas');
+      const mpCtx = mpCanvas.getContext('2d');
+      const w = mpCanvas.width;
+      const h = mpCanvas.height;
+
+      mpCtx.save();
+      mpCtx.clearRect(0, 0, w, h);
+
+      // Gambar video cermin (mirrored) agar gerakan kiri-kanan natural
+      mpCtx.translate(w, 0);
+      mpCtx.scale(-1, 1);
+      mpCtx.drawImage(results.image, 0, 0, w, h);
+
+      const hudGesture = document.getElementById('mp-gesture-hud');
+      const panelGesture = document.getElementById('mp-gesture-panel');
+      const distBadge = document.getElementById('mp-pinch-dist');
+
+      if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+        state.mpHandDetected = true;
+        const lm = results.multiHandLandmarks[0];
+
+        // Gambar kerangka MediaPipe Line warna cyan & hijau neon
+        if (typeof drawConnectors !== 'undefined' && typeof HAND_CONNECTIONS !== 'undefined') {
+          drawConnectors(mpCtx, lm, HAND_CONNECTIONS, { color: '#22d3ee', lineWidth: 2.2 });
+        }
+        if (typeof drawLandmarks !== 'undefined') {
+          drawLandmarks(mpCtx, lm, { color: '#34d399', lineWidth: 1, radius: 2.4 });
+        }
+
+        // Landmark 4 (ujung ibu jari) & Landmark 8 (ujung jari telunjuk)
+        const thumb = lm[4];
+        const index = lm[8];
+        const pinchDist = Math.hypot(thumb.x - index.x, thumb.y - index.y);
+        distBadge.textContent = `d: ${pinchDist.toFixed(2)}`;
+
+        // Hysteresis pinch agar stabil tidak berkedip
+        const isPinching = state.mpWasPinching ? pinchDist < 0.088 : pinchDist < 0.068;
+        state.mpPinching = isPinching;
+
+        // Garis penghubung landmark 4 <-> 8
+        mpCtx.beginPath();
+        mpCtx.moveTo(thumb.x * w, thumb.y * h);
+        mpCtx.lineTo(index.x * w, index.y * h);
+        mpCtx.strokeStyle = isPinching ? '#facc15' : '#22d3ee';
+        mpCtx.lineWidth = 3.5;
+        mpCtx.stroke();
+
+        [thumb, index].forEach((pt) => {
+          mpCtx.beginPath();
+          mpCtx.arc(pt.x * w, pt.y * h, 5, 0, Math.PI * 2);
+          mpCtx.fillStyle = isPinching ? '#facc15' : '#34d399';
+          mpCtx.fill();
+        });
+
+        // Pemetaan titik tengah (4 & 8) secara cermin ke koordinat 3D (X: -8..+4, Y: 0.5..20.5)
+        const midXMirrored = 1 - (thumb.x + index.x) * 0.5;
+        const midY = (thumb.y + index.y) * 0.5;
+
+        const normX = Math.max(0, Math.min(1, (midXMirrored - 0.1) / 0.8));
+        const normY = Math.max(0, Math.min(1, (0.88 - midY) / 0.74));
+
+        state.targetCursorX = -8.0 + normX * 12.0;
+        state.targetCursorY = 0.5 + normY * 20.0;
+
+        // Jarak kursor 3D ke bola saat ini
+        const ballCenterY = state.ballStatus === 'docked' ? (1.08 + getBallRadius()) : (0.24 + getBallRadius() + state.ballY);
+        const distToBall = Math.hypot(state.cursorX - state.ballX, state.cursorY - ballCenterY);
+        const nearBall = distToBall < GRAB_RADIUS;
+        state.isHoveringBall = nearBall && state.ballStatus !== 'falling';
+
+        if (isPinching) {
+          if (!state.mpWasPinching && nearBall && state.ballStatus !== 'falling') {
+            // Baru saja mencubit bola!
+            state.ballStatus = 'grabbed';
+            state.velocity = 0;
+            playSFX('grab');
+          }
+
+          if (state.ballStatus === 'grabbed') {
+            moveGrabbedBallTo(state.cursorX, state.cursorY);
+            hudGesture.textContent = state.isNearTower ? '🧲 SNAP MENARA — Lepas!' : '🤏 CUBIT: Menggeser Bola';
+            hudGesture.className = 'px-2 py-1 text-center text-[10px] font-extrabold bg-amber-500/25 text-amber-300 truncate';
+            panelGesture.textContent = state.isNearTower
+              ? `🧲 Siap Pasang di h = ${state.mountedHeight.toFixed(1)} m — Lepas jari!`
+              : '🤏 Bola dipegang — Geser ke kanan menuju Menara Ukur!';
+          } else {
+            hudGesture.textContent = '🤏 Cubit di dekat bola!';
+            hudGesture.className = 'px-2 py-1 text-center text-[10px] font-extrabold bg-slate-900 text-amber-300 truncate';
+          }
+          state.mpWasPinching = true;
+        } else {
+          // Cubitan baru saja dilepas!
+          if (state.mpWasPinching && state.ballStatus === 'grabbed') {
+            releaseGrabbedBall();
+          }
+          state.mpWasPinching = false;
+
+          if (nearBall && state.ballStatus !== 'falling') {
+            hudGesture.textContent = '✨ Dekat Bola — CUBIT!';
+            hudGesture.className = 'px-2 py-1 text-center text-[10px] font-extrabold bg-emerald-500/25 text-emerald-300 truncate';
+            panelGesture.textContent = '✨ Dekat Bola — CUBIT untuk mengambil!';
+            updateBallStatusHUD('✨ Dekat Bola — CUBIT untuk mengambil!', 'cyan');
+            syncBallVisual();
+          } else {
+            hudGesture.textContent = '🖐️ Arahkan kursor ke bola';
+            hudGesture.className = 'px-2 py-1 text-center text-[10px] font-extrabold bg-slate-900 text-cyan-300 truncate';
+            panelGesture.textContent = '🖐️ Gerakkan tangan ke Rak Bola lalu CUBIT!';
+            syncBallVisual();
+          }
+        }
+      } else {
+        state.mpHandDetected = false;
+        state.mpPinching = false;
+        state.isHoveringBall = false;
+        if (state.mpWasPinching && state.ballStatus === 'grabbed') {
+          releaseGrabbedBall();
+        }
+        state.mpWasPinching = false;
+        distBadge.textContent = 'd: --';
+        hudGesture.textContent = 'Arahkan tangan ke kamera...';
+        hudGesture.className = 'px-2 py-1 text-center text-[10px] font-extrabold bg-slate-900 text-slate-400 truncate';
+      }
+
+      mpCtx.restore();
+    }
+
+    /**
+     * ============================================================================
+     * 11. LKPD INTERAKTIF (6 PERCOBAAN, VERIFIKASI Ep, CETAK A4 & SALIN)
+     * ============================================================================
+     */
+    function recordToLKPD() {
+      const validH = (state.ballStatus === 'mounted' || state.ballStatus === 'falling' || state.ballStatus === 'landed')
+        ? Number(state.mountedHeight.toFixed(1))
+        : 0;
+
+      if (validH <= 0) {
+        showToast('Pasang bola di Menara Ukur (h > 0 m) terlebih dahulu sebelum mencatat ke LKPD!', '⚠️');
+        playSFX('click');
+        return;
+      }
+
+      let targetIdx = state.lkpdRows.findIndex((r) => !r.recorded && r.planetHint === state.planet.id);
+      if (targetIdx === -1) {
+        targetIdx = state.lkpdRows.findIndex((r) => !r.recorded);
+      }
+      if (targetIdx === -1) {
+        showToast('Semua 6 baris percobaan LKPD sudah terisi! Klik Reset di tab LKPD untuk mengulang.', 'ℹ️');
+        playSFX('click');
+        return;
+      }
+
+      const row = state.lkpdRows[targetIdx];
+      row.recorded = true;
+      row.planetName = state.planet.name;
+      row.m = state.mass;
+      row.g = state.planet.g;
+      row.h = validH;
+      row.trueEp = Number((row.m * row.g * row.h).toFixed(2));
+      state.lkpdChecked = false;
+
+      playSFX('record');
+      updateLKPDBadge();
+      showToast(`Percobaan #${targetIdx + 1} (${row.planetName}, m=${row.m}kg, h=${row.h}m) dicatat ke LKPD!`, '📝');
+    }
+
+    function updateLKPDBadge() {
+      const count = state.lkpdRows.filter((r) => r.recorded).length;
+      const badge = document.getElementById('lkpd-badge');
+      if (count > 0) {
+        badge.textContent = count;
+        badge.classList.remove('hidden');
+      } else {
+        badge.classList.add('hidden');
+      }
+    }
+
+    function onUserEpInput(idx, val) {
+      state.lkpdRows[idx].userEp = val;
+      state.lkpdChecked = false;
+      document.getElementById('lkpd-score-box').classList.add('hidden');
+    }
+
+    function renderLKPDTable() {
+      const tbody = document.getElementById('lkpd-table-body');
+      tbody.innerHTML = '';
+
+      state.lkpdRows.forEach((row, idx) => {
+        let statusHtml = '<span class="text-slate-500">—</span>';
+        if (state.lkpdChecked && row.recorded) {
+          const parsed = parseFloat(String(row.userEp).replace(',', '.'));
+          if (isNaN(parsed)) {
+            statusHtml = '<span class="text-amber-400 font-bold">Kosong</span>';
+          } else {
+            const tol = Math.max(1.0, row.trueEp * 0.02);
+            statusHtml = Math.abs(parsed - row.trueEp) <= tol
+              ? '<span class="text-emerald-400 font-extrabold">✓ Benar</span>'
+              : '<span class="text-rose-400 font-extrabold">✗ Salah</span>';
+          }
+        }
+
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-slate-800/40 transition';
+        tr.innerHTML = `
+          <td class="py-2 px-2 text-center font-mono text-slate-400">${idx + 1}</td>
+          <td class="py-2 px-2">
+            <div class="font-bold text-white leading-tight">${row.title}</div>
+            <div class="text-[10px] text-cyan-300 font-mono">${row.recorded ? row.planetName : 'Belum dicatat'}</div>
+          </td>
+          <td class="py-2 px-2 text-center font-mono ${row.recorded ? 'text-amber-300 font-bold' : 'text-slate-500'}">
+            ${row.recorded ? row.m : '—'}
+          </td>
+          <td class="py-2 px-2 text-center font-mono ${row.recorded ? 'text-cyan-300 font-bold' : 'text-slate-500'}">
+            ${row.recorded ? row.g.toFixed(2) : '—'}
+          </td>
+          <td class="py-2 px-2 text-center font-mono ${row.recorded ? 'text-emerald-300 font-bold' : 'text-slate-500'}">
+            ${row.recorded ? row.h : '—'}
+          </td>
+          <td class="py-2 px-2 text-center">
+            <input type="text" value="${escapeHtml(row.userEp)}"
+              ${row.recorded ? '' : 'disabled'}
+              oninput="onUserEpInput(${idx}, this.value)"
+              placeholder="${row.recorded ? 'Isi Ep...' : '-'}"
+              class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-center font-mono text-xs text-white placeholder-slate-600 focus:outline-none focus:border-cyan-400 disabled:opacity-40" />
+          </td>
+          <td class="py-2 px-2 text-center text-xs">${statusHtml}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function checkLKPDAnswers() {
+      const recordedRows = state.lkpdRows.filter((r) => r.recorded);
+      if (recordedRows.length === 0) {
+        showToast('Catat minimal 1 data percobaan dari Simulasi ke LKPD terlebih dahulu!', '⚠️');
+        playSFX('click');
+        return;
+      }
+
+      let correct = 0;
+      state.lkpdRows.forEach((row) => {
+        if (!row.recorded) return;
+        const parsed = parseFloat(String(row.userEp).replace(',', '.'));
+        if (!isNaN(parsed)) {
+          const tol = Math.max(1.0, row.trueEp * 0.02);
+          if (Math.abs(parsed - row.trueEp) <= tol) correct++;
+        }
+      });
+
+      state.lkpdChecked = true;
+      renderLKPDTable();
+
+      const scoreBox = document.getElementById('lkpd-score-box');
+      scoreBox.textContent = `Skor: ${correct}/${state.lkpdRows.length}`;
+      scoreBox.classList.remove('hidden');
+
+      playSFX(correct === state.lkpdRows.length ? 'success' : 'record');
+      showToast(`Verifikasi selesai! Perhitungan Ep benar: ${correct} dari ${state.lkpdRows.length}.`, '✅');
+    }
+
+    function resetLKPD() {
+      playSFX('reset');
+      state.lkpdRows.forEach((r) => {
+        r.recorded = false;
+        r.planetName = '-';
+        r.m = null;
+        r.g = null;
+        r.h = null;
+        r.trueEp = null;
+        r.userEp = '';
+      });
+      state.lkpdChecked = false;
+      document.getElementById('lkpd-name').value = '';
+      document.getElementById('lkpd-class').value = '';
+      document.getElementById('lkpd-hots-1').value = '';
+      document.getElementById('lkpd-hots-2').value = '';
+      document.getElementById('lkpd-conclusion').value = '';
+      document.getElementById('lkpd-score-box').classList.add('hidden');
+      updateLKPDBadge();
+      renderLKPDTable();
+      showToast('Seluruh data LKPD telah dibersihkan.', '🔄');
+    }
+
+    function escapeHtml(str) {
+      return String(str || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    function printLKPD() {
+      playSFX('click');
+      const name = document.getElementById('lkpd-name').value.trim() || '............................................';
+      const cls = document.getElementById('lkpd-class').value.trim() || 'X / ........';
+      const hots1 = document.getElementById('lkpd-hots-1').value.trim() || '(Belum dijawab)';
+      const hots2 = document.getElementById('lkpd-hots-2').value.trim() || '(Belum dijawab)';
+      const conc = document.getElementById('lkpd-conclusion').value.trim() || '(Belum diisi)';
+      const today = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+
+      let rowsHtml = '';
+      let correctCount = 0;
+      state.lkpdRows.forEach((row, i) => {
+        const mTxt = row.recorded ? `${row.m} kg` : '-';
+        const gTxt = row.recorded ? `${row.g.toFixed(2)} m/s²` : '-';
+        const hTxt = row.recorded ? `${row.h} m` : '-';
+        const epTxt = row.userEp ? `${row.userEp} J` : (row.recorded ? '(Belum dihitung)' : '-');
+
+        if (row.recorded) {
+          const parsed = parseFloat(String(row.userEp).replace(',', '.'));
+          if (!isNaN(parsed) && Math.abs(parsed - row.trueEp) <= Math.max(1.0, row.trueEp * 0.02)) {
+            correctCount++;
+          }
+        }
+
+        rowsHtml += `
+          <tr>
+            <td style="border:1px solid #334155; padding:6px; text-align:center;">${i + 1}</td>
+            <td style="border:1px solid #334155; padding:6px;"><strong>${escapeHtml(row.title)}</strong> (${escapeHtml(row.planetName)})</td>
+            <td style="border:1px solid #334155; padding:6px; text-align:center;">${escapeHtml(mTxt)}</td>
+            <td style="border:1px solid #334155; padding:6px; text-align:center;">${escapeHtml(gTxt)}</td>
+            <td style="border:1px solid #334155; padding:6px; text-align:center;">${escapeHtml(hTxt)}</td>
+            <td style="border:1px solid #334155; padding:6px; text-align:center; font-weight:700;">${escapeHtml(epTxt)}</td>
+          </tr>
+        `;
+      });
+
+      const scoreText = state.lkpdChecked ? `${correctCount} / ${state.lkpdRows.length}` : 'Belum diperiksa';
+      const printSheet = document.getElementById('print-lkpd-sheet');
+      printSheet.innerHTML = `
+        <div style="border-bottom:3px double #0f172a; padding-bottom:10px; margin-bottom:14px; text-align:center;">
+          <div style="font-size:16px; font-weight:800; letter-spacing:0.5px;">LEMBAR KERJA PESERTA DIDIK (LKPD) — LAB MAYA FISIKA 3D</div>
+          <div style="font-size:13px; font-weight:700; margin-top:2px;">Energi Potensial Gravitasi (Ep = m·g·h) &amp; Gestur Cubit MediaPipe Line (Fase E / Kelas X)</div>
+          <div style="font-size:11px; color:#334155; margin-top:2px;">Fendy Novafianto, S.Pd. — SMAN 1 Boja (2026)</div>
+        </div>
+
+        <table style="width:100%; font-size:12px; margin-bottom:14px; border-collapse:collapse;">
+          <tr>
+            <td style="width:55%; padding:2px 0;"><strong>Nama / Kelompok:</strong> ${escapeHtml(name)}</td>
+            <td style="width:45%; padding:2px 0;"><strong>Tanggal:</strong> ${escapeHtml(today)}</td>
+          </tr>
+          <tr>
+            <td style="padding:2px 0;"><strong>Kelas:</strong> ${escapeHtml(cls)}</td>
+            <td style="padding:2px 0;"><strong>Skor Verifikasi Ep:</strong> ${escapeHtml(scoreText)}</td>
+          </tr>
+        </table>
+
+        <div style="font-size:12px; font-weight:800; margin-bottom:6px;">A. Tabel Hasil Pengamatan &amp; Perhitungan 6 Percobaan</div>
+        <table style="width:100%; border-collapse:collapse; font-size:11px; margin-bottom:16px;">
+          <thead>
+            <tr style="background:#e2e8f0;">
+              <th style="border:1px solid #334155; padding:6px; width:30px;">No</th>
+              <th style="border:1px solid #334155; padding:6px; text-align:left;">Percobaan &amp; Planet</th>
+              <th style="border:1px solid #334155; padding:6px;">Massa (m)</th>
+              <th style="border:1px solid #334155; padding:6px;">Gravitasi (g)</th>
+              <th style="border:1px solid #334155; padding:6px;">Tinggi (h)</th>
+              <th style="border:1px solid #334155; padding:6px;">Hasil Hitung Ep</th>
+            </tr>
+          </thead>
+          <tbody>${rowsHtml}</tbody>
+        </table>
+
+        <div style="font-size:12px; font-weight:800; margin-bottom:6px;">B. Pertanyaan Analisis HOTS</div>
+        <div style="font-size:11px; margin-bottom:10px;">
+          <div style="font-weight:700; margin-bottom:3px;">1. Analisis mengapa peningkatan ketinggian bendungan PLTA secara signifikan meningkatkan daya listrik yang dihasilkan turbin air!</div>
+          <div style="border:1px solid #64748b; border-radius:6px; padding:8px; min-height:42px; white-space:pre-wrap;">${escapeHtml(hots1)}</div>
+        </div>
+        <div style="font-size:11px; margin-bottom:14px;">
+          <div style="font-weight:700; margin-bottom:3px;">2. Bandingkan energi potensial dan kecepatan jatuh benda identik (m &amp; h sama) di Bumi vs Bulan. Mengapa di Bulan benda melayang jatuh jauh lebih lambat?</div>
+          <div style="border:1px solid #64748b; border-radius:6px; padding:8px; min-height:42px; white-space:pre-wrap;">${escapeHtml(hots2)}</div>
+        </div>
+
+        <div style="font-size:12px; font-weight:800; margin-bottom:6px;">C. Kesimpulan</div>
+        <div style="border:1px solid #64748b; border-radius:6px; padding:8px; min-height:48px; font-size:11px; white-space:pre-wrap; margin-bottom:20px;">${escapeHtml(conc)}</div>
+
+        <table style="width:100%; font-size:11px; margin-top:12px;">
+          <tr>
+            <td style="width:65%;"></td>
+            <td style="width:35%; text-align:center;">
+              <div>Mengetahui, Guru Mata Pelajaran</div>
+              <div style="height:48px;"></div>
+              <div style="border-top:1px solid #334155; padding-top:3px;">Fendy Novafianto, S.Pd.</div>
+            </td>
+          </tr>
+        </table>
+      `;
+
+      showToast('Membuka dialog cetak / simpan PDF A4 LKPD...', '🖨️');
+      setTimeout(() => window.print(), 150);
+    }
+
+    function copyLKPDSummary() {
+      playSFX('click');
+      const name = document.getElementById('lkpd-name').value.trim() || '-';
+      const cls = document.getElementById('lkpd-class').value.trim() || '-';
+      const hots1 = document.getElementById('lkpd-hots-1').value.trim() || '(Belum dijawab)';
+      const hots2 = document.getElementById('lkpd-hots-2').value.trim() || '(Belum dijawab)';
+      const conc = document.getElementById('lkpd-conclusion').value.trim() || '(Belum diisi)';
+
+      let text = '=== HASIL LKPD LAB MAYA FISIKA 3D: ENERGI POTENSIAL GRAVITASI (KELAS X) ===\n';
+      text += `Nama: ${name} | Kelas: ${cls}\n\n`;
+      text += 'A. DATA 6 PERCOBAAN:\n';
+      state.lkpdRows.forEach((r, i) => {
+        if (r.recorded) {
+          text += `${i + 1}. ${r.title} (${r.planetName}) | m=${r.m} kg, g=${r.g} m/s², h=${r.h} m | Hitung Ep=${r.userEp || '-'} J\n`;
+        } else {
+          text += `${i + 1}. ${r.title} | Belum dicatat\n`;
+        }
+      });
+      text += `\nB. PERTANYAAN HOTS:\n1. Efisiensi PLTA: ${hots1}\n2. Bumi vs Bulan: ${hots2}\n`;
+      text += `\nC. KESIMPULAN:\n${conc}`;
+
+      // Menggunakan document.execCommand('copy') agar aman di lingkungan iFrame
+      const tempArea = document.createElement('textarea');
+      tempArea.value = text;
+      tempArea.style.position = 'fixed';
+      tempArea.style.opacity = '0';
+      document.body.appendChild(tempArea);
+      tempArea.select();
+      try {
+        document.execCommand('copy');
+        showToast('Ringkasan LKPD berhasil disalin ke clipboard!', '📋');
+      } catch (e) {
+        showToast('Gagal menyalin ringkasan LKPD.', '⚠️');
+      }
+      document.body.removeChild(tempArea);
+    }
+
+    /**
+     * ============================================================================
+     * 12. SPLASH SCREEN LOADING & INISIALISASI SAAT WINDOW ONLOAD
+     * ============================================================================
+     */
+    function runSplashLoading() {
+      const bar = document.getElementById('splash-loading-bar');
+      const pctEl = document.getElementById('splash-loading-percent');
+      const statusEl = document.getElementById('splash-loading-status');
+      const startBtn = document.getElementById('btn-splash-start');
+
+      let progress = 0;
+      const timer = setInterval(() => {
+        progress += Math.floor(Math.random() * 9) + 5;
+        if (progress >= 100) {
+          progress = 100;
+          clearInterval(timer);
+          if (statusEl) statusEl.textContent = 'Lab Maya Fisika 3D & Gestur Cubit siap!';
+          if (startBtn) {
+            startBtn.classList.remove('hidden');
+            startBtn.classList.add('animate-fade-in');
+          }
+        } else if (progress >= 70) {
+          if (statusEl) statusEl.textContent = 'Menyiapkan Kursor 3D MediaPipe Hands Line...';
+        } else if (progress >= 35) {
+          if (statusEl) statusEl.textContent = 'Membangun Rak Bola, Menara 0–20 m & Klem Magnetis...';
+        }
+
+        if (bar) bar.style.width = `${progress}%`;
+        if (pctEl) pctEl.textContent = `${progress}%`;
+      }, 70);
+    }
+
+    function enterLabFromSplash() {
+      playSFX('start');
+      const splash = document.getElementById('splash-screen');
+      if (splash) {
+        splash.classList.add('splash-hide');
+        setTimeout(() => {
+          splash.style.display = 'none';
+          resizeThreeViewport();
+          showToast('Halo Sobat SMA! Cubit atau seret bola dari Rak ke Menara Ukur!', '⚡');
+        }, 700);
+      }
+    }
+
+    window.addEventListener('resize', resizeThreeViewport);
+
+    window.onload = function () {
+      initThreeEngine();
+      updateEnergyReadouts();
+      renderLKPDTable();
+      switchTab('simulasi');
+      resizeThreeViewport();
+      lastFrameTime = performance.now();
+      requestAnimationFrame(animate);
+      runSplashLoading();
+    };
+  </script>
+</body>
+</html>
