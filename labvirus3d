@@ -1,0 +1,2252 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Lab Maya Biologi — Anatomi Virus 3D (Fase E Kelas X)</title>
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Three.js r128 CDN untuk Rendering 3D WebGL 60 FPS -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+  <!-- Google Fonts: Inter & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet" />
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+        },
+      },
+    };
+  </script>
+
+  <style>
+    /* Mengunci layar penuh tanpa scrollbar */
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      background-color: #020617;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    /* Frame 16:9 responsif yang selalu pas di layar tanpa scroll */
+    #app-stage {
+      width: 100vw;
+      height: 56.25vw; /* 9 / 16 = 0.5625 */
+      max-height: 100vh;
+      max-width: 177.78vh; /* 16 / 9 = 1.7778 */
+    }
+
+    /* Animasi transisi halus */
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .animate-fade-in {
+      animation: fadeIn 0.24s ease-out forwards;
+    }
+
+    @keyframes pulseGlow {
+      0%, 100% { box-shadow: 0 0 18px rgba(16, 185, 129, 0.55), 0 8px 20px rgba(2, 6, 23, 0.5); }
+      50% { box-shadow: 0 0 32px rgba(34, 211, 238, 0.9), 0 10px 26px rgba(2, 6, 23, 0.6); }
+    }
+    .btn-start-glow {
+      animation: pulseGlow 2s ease-in-out infinite;
+    }
+
+    #splash-screen.splash-hide {
+      opacity: 0;
+      transform: scale(1.04);
+      pointer-events: none;
+    }
+
+    /* Sembunyikan scrollbar internal jika teks padat */
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+
+    /* Kursor interaktif untuk viewport 3D */
+    #three-container {
+      cursor: grab;
+      touch-action: none;
+    }
+    #three-container:active {
+      cursor: grabbing;
+    }
+
+    /* Gaya khusus cetak LKPD A4 Portrait */
+    @media print {
+      @page {
+        size: A4 portrait;
+        margin: 14mm;
+      }
+      html, body {
+        width: auto !important;
+        height: auto !important;
+        overflow: visible !important;
+        background: #ffffff !important;
+        color: #0f172a !important;
+        display: block !important;
+      }
+      #app-stage {
+        display: none !important;
+      }
+      #print-lkpd-sheet {
+        display: block !important;
+        font-family: 'Inter', sans-serif;
+        color: #0f172a;
+      }
+    }
+  </style>
+</head>
+<body class="flex items-center justify-center font-sans text-slate-100 antialiased">
+
+  <!-- Container Utama 16:9 Full Screen -->
+  <div id="app-stage" class="relative flex flex-col bg-slate-900 border border-slate-700/70 shadow-2xl overflow-hidden rounded-lg">
+
+    <!-- ==================== SPLASH SCREEN 16:9 OVERLAY ==================== -->
+    <div id="splash-screen" class="absolute inset-0 z-50 flex flex-col justify-between overflow-hidden bg-slate-950 transition-all duration-700 ease-out">
+      <!-- Gambar Utama Splash Screen (Otomatis fallback ke SVG jika splash.png tidak ditemukan) -->
+      <img
+        id="splash-bg-img"
+        src="splash.png"
+        alt="Splash Screen Lab Maya Biologi Anatomi Virus 3D"
+        class="absolute inset-0 w-full h-full object-cover select-none pointer-events-none"
+        onerror="this.style.display='none'; document.getElementById('splash-fallback').classList.remove('hidden');"
+      />
+
+      <!-- Fallback Ilustrasi SVG Presisi Bertema Biologi Molekuler -->
+      <div id="splash-fallback" class="hidden absolute inset-0 w-full h-full overflow-hidden bg-gradient-to-br from-slate-950 via-cyan-950 to-emerald-950 select-none pointer-events-none">
+        <!-- Cahaya Bioluminesens Latar -->
+        <div class="absolute inset-0 opacity-60" style="background: radial-gradient(circle at 50% 42%, rgba(16,185,129,0.28) 0%, transparent 55%), radial-gradient(circle at 18% 60%, rgba(34,211,238,0.25) 0%, transparent 48%), radial-gradient(circle at 84% 55%, rgba(139,92,246,0.25) 0%, transparent 48%);"></div>
+
+        <!-- Grid Molekuler Halus -->
+        <svg class="absolute inset-0 w-full h-full opacity-15" viewBox="0 0 1280 720" fill="none">
+          <defs>
+            <pattern id="bio-grid" width="48" height="48" patternUnits="userSpaceOnUse">
+              <path d="M48 0H0V48" stroke="#38bdf8" stroke-width="0.7" />
+            </pattern>
+          </defs>
+          <rect width="1280" height="720" fill="url(#bio-grid)" />
+        </svg>
+
+        <!-- Pita Lengkung Atas & Bawah -->
+        <svg class="absolute top-0 left-0 w-2/5 h-auto" viewBox="0 0 420 120" fill="none">
+          <path d="M0 0H360C250 28 115 58 0 118V0Z" fill="#0d9488" opacity="0.85" />
+          <path d="M0 0H290C195 24 90 50 0 94V0Z" fill="#0f766e" />
+        </svg>
+        <svg class="absolute bottom-0 inset-x-0 w-full h-auto" viewBox="0 0 1280 120" fill="none" preserveAspectRatio="none">
+          <path d="M0 24C340 110 920 125 1280 42V120H0V24Z" fill="#10b981" opacity="0.85" />
+          <path d="M0 40C350 118 930 132 1280 62V120H0V40Z" fill="#0891b2" opacity="0.9" />
+          <path d="M0 58C360 125 940 135 1280 80V120H0V58Z" fill="#0f172a" />
+        </svg>
+
+        <!-- Ilustrasi Untai DNA / RNA Kiri Atas -->
+        <svg class="absolute top-[11%] left-[5%] w-44 h-24 opacity-85 drop-shadow" viewBox="0 0 200 100" fill="none">
+          <path d="M10 30 Q 45 5, 80 30 T 150 30 T 195 30" stroke="#22d3ee" stroke-width="4" stroke-linecap="round" />
+          <path d="M10 70 Q 45 95, 80 70 T 150 70 T 195 70" stroke="#34d399" stroke-width="4" stroke-linecap="round" />
+          <line x1="28" y1="22" x2="28" y2="78" stroke="#a78bfa" stroke-width="2.5" />
+          <line x1="56" y1="20" x2="56" y2="80" stroke="#facc15" stroke-width="2.5" />
+          <line x1="98" y1="36" x2="98" y2="64" stroke="#a78bfa" stroke-width="2.5" />
+          <line x1="130" y1="22" x2="130" y2="78" stroke="#facc15" stroke-width="2.5" />
+          <line x1="168" y1="22" x2="168" y2="78" stroke="#a78bfa" stroke-width="2.5" />
+        </svg>
+
+        <!-- Ilustrasi Bakteriofag T4 Kiri Bawah -->
+        <svg class="absolute bottom-[13%] left-[5%] w-[21%] h-auto drop-shadow-[0_12px_24px_rgba(6,182,212,0.35)]" viewBox="0 0 240 260" fill="none">
+          <!-- Kepala Ikosahedral -->
+          <polygon points="120,16 168,46 168,104 120,134 72,104 72,46" fill="rgba(16,185,129,0.28)" stroke="#34d399" stroke-width="4" />
+          <polyline points="72,46 120,66 168,46" stroke="#6ee7b7" stroke-width="2" />
+          <polyline points="120,16 120,66 120,134" stroke="#6ee7b7" stroke-width="2" opacity="0.7" />
+          <!-- DNA di dalam kepala -->
+          <path d="M104 52 C 136 62, 104 82, 136 94 C 110 106, 130 112, 114 118" stroke="#facc15" stroke-width="3.5" stroke-linecap="round" />
+          <!-- Leher & Selubung Ekor -->
+          <rect x="104" y="134" width="32" height="10" rx="4" fill="#22d3ee" />
+          <rect x="108" y="144" width="24" height="58" rx="4" fill="#0891b2" stroke="#67e8f9" stroke-width="2" />
+          <line x1="108" y1="156" x2="132" y2="156" stroke="#cffafe" stroke-width="2" />
+          <line x1="108" y1="168" x2="132" y2="168" stroke="#cffafe" stroke-width="2" />
+          <line x1="108" y1="180" x2="132" y2="180" stroke="#cffafe" stroke-width="2" />
+          <line x1="108" y1="192" x2="132" y2="192" stroke="#cffafe" stroke-width="2" />
+          <!-- Papan Dasar -->
+          <polygon points="94,202 146,202 138,214 102,214" fill="#a78bfa" />
+          <!-- 6 Serabut Ekor -->
+          <polyline points="100,208 56,186 28,246" stroke="#38bdf8" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" />
+          <polyline points="104,212 68,208 50,252" stroke="#38bdf8" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+          <polyline points="140,208 184,186 212,246" stroke="#38bdf8" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" />
+          <polyline points="136,212 172,208 190,252" stroke="#38bdf8" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+
+        <!-- Ilustrasi Coronavirus (SARS-CoV-2) Kanan -->
+        <svg class="absolute bottom-[15%] right-[5%] w-[21%] h-auto drop-shadow-[0_12px_24px_rgba(139,92,246,0.4)]" viewBox="0 0 240 240" fill="none">
+          <!-- Spike Mahkota -->
+          <g stroke="#f43f5e" stroke-width="5" stroke-linecap="round">
+            <line x1="120" y1="30" x2="120" y2="54" />
+            <line x1="120" y1="186" x2="120" y2="210" />
+            <line x1="30" y1="120" x2="54" y2="120" />
+            <line x1="186" y1="120" x2="210" y2="120" />
+            <line x1="56" y1="56" x2="74" y2="74" />
+            <line x1="166" y1="166" x2="184" y2="184" />
+            <line x1="184" y1="56" x2="166" y2="74" />
+            <line x1="74" y1="166" x2="56" y2="184" />
+          </g>
+          <g fill="#fb7185">
+            <circle cx="120" cy="24" r="9" />
+            <circle cx="120" cy="216" r="9" />
+            <circle cx="24" cy="120" r="9" />
+            <circle cx="216" cy="120" r="9" />
+            <circle cx="52" cy="52" r="9" />
+            <circle cx="188" cy="188" r="9" />
+            <circle cx="188" cy="52" r="9" />
+            <circle cx="52" cy="188" r="9" />
+          </g>
+          <!-- Amplop Lipid -->
+          <circle cx="120" cy="120" r="66" fill="rgba(139,92,246,0.3)" stroke="#a78bfa" stroke-width="5" />
+          <circle cx="120" cy="120" r="54" stroke="#c4b5fd" stroke-width="2" stroke-dasharray="6 5" />
+          <!-- RNA Spiral di Dalam -->
+          <path d="M90 105 C 105 82, 138 86, 145 110 C 150 132, 122 152, 100 142 C 82 134, 88 112, 112 114 C 128 116, 130 130, 116 132" stroke="#34d399" stroke-width="4" stroke-linecap="round" />
+        </svg>
+
+        <!-- Banner Judul Utama di Tengah -->
+        <div class="absolute inset-0 flex flex-col items-center justify-center pb-12">
+          <div class="relative flex flex-col items-center">
+            <!-- Badge Atas: Lab Maya Biologi -->
+            <div class="relative z-10 -mb-4 px-6 py-1.5 rounded-full bg-gradient-to-r from-emerald-400 to-cyan-400 border-4 border-slate-950 shadow-lg flex items-center gap-2">
+              <span class="text-lg">🧬</span>
+              <span class="text-base sm:text-xl lg:text-2xl font-extrabold text-slate-950 tracking-tight">Lab Maya Biologi</span>
+            </div>
+
+            <!-- Panel Utama -->
+            <div class="px-10 sm:px-14 py-6 sm:py-7 rounded-[2.5rem] bg-gradient-to-b from-slate-900/95 via-cyan-950/95 to-slate-950/95 border-[4px] border-emerald-400/90 shadow-2xl text-center backdrop-blur-md">
+              <div class="text-3xl sm:text-5xl lg:text-6xl font-black text-white tracking-tight drop-shadow-[0_4px_12px_rgba(16,185,129,0.45)] leading-tight">
+                Anatomi <span class="text-transparent bg-clip-text bg-gradient-to-r from-emerald-300 via-cyan-300 to-violet-300">Virus 3D</span>
+              </div>
+              <div class="text-xs sm:text-sm font-mono font-bold text-cyan-300 tracking-widest uppercase mt-1.5">
+                Bakteriofag T4 • SARS-CoV-2 • Tobacco Mosaic Virus
+              </div>
+            </div>
+
+            <!-- Badge Bawah -->
+            <div class="relative z-10 -mt-4 px-7 py-1.5 rounded-full bg-white border-2 border-emerald-300 shadow-lg">
+              <span class="text-xs sm:text-sm lg:text-base font-extrabold text-slate-900">untuk Siswa SMA Fase E (Kelas X)</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bar Atas Splash Screen: Identitas & SFX -->
+      <div class="relative z-20 flex items-center justify-between px-4 pt-3">
+        <div class="px-3.5 py-1 rounded-full bg-slate-950/75 backdrop-blur-md border border-emerald-500/35 text-[11px] font-bold text-emerald-200 shadow">
+          Tim MGMP Biologi • SMAN 1 Boja
+        </div>
+        <button onclick="toggleSound()" title="Aktifkan/Matikan Efek Suara"
+          class="flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-950/75 hover:bg-slate-900/90 backdrop-blur-md border border-cyan-400/35 text-xs font-bold text-cyan-300 shadow transition cursor-pointer">
+          <span id="splash-sound-icon">🔊</span>
+          <span id="splash-sound-label">SFX ON</span>
+        </button>
+      </div>
+
+      <!-- Bar Bawah Splash Screen: Loading 0-100% & Tombol Mulai -->
+      <div class="relative z-20 flex flex-col items-center justify-end pb-4 sm:pb-5 px-6">
+        <div class="w-full max-w-md bg-slate-950/85 backdrop-blur-md border border-emerald-500/30 rounded-2xl px-5 py-3 shadow-2xl flex flex-col items-center gap-2.5">
+          <div id="splash-loading-wrap" class="w-full flex flex-col gap-1.5">
+            <div class="flex items-center justify-between text-[11px] sm:text-xs font-bold">
+              <span id="splash-loading-status" class="text-emerald-300">Menginisialisasi engine WebGL 3D...</span>
+              <span id="splash-loading-percent" class="font-mono text-cyan-300">0%</span>
+            </div>
+            <div class="w-full h-2.5 bg-slate-800 rounded-full overflow-hidden border border-slate-700">
+              <div id="splash-loading-bar" class="h-full w-0 rounded-full bg-gradient-to-r from-emerald-400 via-cyan-400 to-violet-400 transition-all duration-100 ease-out"></div>
+            </div>
+          </div>
+
+          <button
+            id="btn-splash-start"
+            onclick="enterLabFromSplash()"
+            onmouseenter="playSFX('hover')"
+            class="hidden w-full py-2.5 px-6 rounded-xl bg-gradient-to-r from-emerald-400 via-cyan-400 to-emerald-500 hover:from-emerald-300 hover:to-cyan-300 text-slate-950 font-extrabold text-sm sm:text-base tracking-wide transition-all transform hover:scale-[1.02] active:scale-[0.98] cursor-pointer flex items-center justify-center gap-2 btn-start-glow">
+            <span>▶</span>
+            <span>MULAI PRAKTIKUM</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== HEADER & NAVIGASI 6 TAB ==================== -->
+    <header class="shrink-0 h-[10%] min-h-[48px] bg-slate-950/95 border-b border-slate-800 px-4 flex items-center justify-between gap-2">
+      <!-- Identitas Aplikasi -->
+      <div class="flex items-center gap-2.5 min-w-0">
+        <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 via-cyan-500 to-violet-600 flex items-center justify-center shadow-lg shadow-emerald-500/20 shrink-0">
+          <!-- Ikon Virus SVG -->
+          <svg class="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="5" />
+            <path stroke-linecap="round" d="M12 2v3m0 14v3M2 12h3m14 0h3M4.9 4.9l2.1 2.1m10 10l2.1 2.1M19.1 4.9L17 7M7 17l-2.1 2.1" />
+          </svg>
+        </div>
+        <div class="truncate">
+          <h1 class="text-xs sm:text-sm lg:text-base font-extrabold tracking-tight text-white leading-tight truncate">
+            LAB MAYA BIOLOGI: <span class="text-emerald-400">ANATOMI VIRUS 3D</span>
+          </h1>
+          <p class="text-[10px] sm:text-xs text-slate-400 font-medium leading-tight truncate">
+            Fase E • Kelas X SMA • Struktur, Bentuk &amp; Fungsi Partikel Virus
+          </p>
+        </div>
+      </div>
+
+      <!-- Navigasi 6 Tab Utama -->
+      <nav class="flex items-center gap-1 bg-slate-900/90 p-1 rounded-xl border border-slate-800" aria-label="Menu Utama">
+        <button onclick="switchTab('tujuan')" id="tab-btn-tujuan" class="tab-btn px-2.5 py-1.5 rounded-lg text-[11px] lg:text-xs font-semibold transition-all cursor-pointer">Tujuan</button>
+        <button onclick="switchTab('teori')" id="tab-btn-teori" class="tab-btn px-2.5 py-1.5 rounded-lg text-[11px] lg:text-xs font-semibold transition-all cursor-pointer">Teori</button>
+        <button onclick="switchTab('prosedur')" id="tab-btn-prosedur" class="tab-btn px-2.5 py-1.5 rounded-lg text-[11px] lg:text-xs font-semibold transition-all cursor-pointer">Prosedur</button>
+        <button onclick="switchTab('simulasi')" id="tab-btn-simulasi" class="tab-btn px-2.5 py-1.5 rounded-lg text-[11px] lg:text-xs font-semibold transition-all cursor-pointer">Simulasi</button>
+        <button onclick="switchTab('lkpd')" id="tab-btn-lkpd" class="tab-btn px-2.5 py-1.5 rounded-lg text-[11px] lg:text-xs font-semibold transition-all cursor-pointer relative">
+          LKPD
+          <span id="lkpd-badge" class="hidden absolute -top-1 -right-1 w-4 h-4 rounded-full bg-emerald-400 text-[9px] font-extrabold text-slate-950 flex items-center justify-center">0</span>
+        </button>
+        <button onclick="switchTab('pengembang')" id="tab-btn-pengembang" class="tab-btn px-2.5 py-1.5 rounded-lg text-[11px] lg:text-xs font-semibold transition-all cursor-pointer">Pengembang</button>
+      </nav>
+
+      <!-- Kontrol Audio & Fullscreen -->
+      <div class="flex items-center gap-1.5 shrink-0">
+        <button id="btn-sound" onclick="toggleSound()" title="Aktifkan/Matikan Efek Suara"
+          class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-semibold text-emerald-300 transition cursor-pointer">
+          <span id="sound-icon">🔊</span>
+          <span class="hidden md:inline" id="sound-label">SFX ON</span>
+        </button>
+        <button id="btn-fullscreen" onclick="toggleFullscreen()" title="Layar Penuh"
+          class="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white transition cursor-pointer">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- ==================== AREA KONTEN UTAMA (90% TINGGI) ==================== -->
+    <main class="relative flex-1 overflow-hidden bg-gradient-to-br from-slate-900 via-slate-900 to-slate-950">
+
+      <!-- Toast Notification (Pengganti alert/confirm) -->
+      <div id="toast-box" class="pointer-events-none absolute top-3 left-1/2 -translate-x-1/2 z-50 hidden">
+        <div id="toast-content" class="px-4 py-2 rounded-xl bg-slate-900/95 border border-emerald-500/50 text-xs sm:text-sm font-medium text-white shadow-xl flex items-center gap-2 backdrop-blur-md">
+          <span id="toast-icon">ℹ️</span>
+          <span id="toast-msg">Notifikasi</span>
+        </div>
+      </div>
+
+      <!-- ==================== TAB 1: TUJUAN ==================== -->
+      <section id="panel-tujuan" class="tab-panel hidden h-full w-full p-5 flex flex-col justify-between animate-fade-in">
+        <div class="grid grid-cols-12 gap-4 h-full">
+          <!-- Kolom Kiri: Capaian Pembelajaran -->
+          <div class="col-span-5 bg-slate-800/60 border border-slate-700/70 rounded-2xl p-5 flex flex-col justify-between">
+            <div>
+              <span class="inline-block px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/35 text-emerald-300 text-xs font-bold mb-3">
+                CAPAIAN PEMBELAJARAN • FASE E (KELAS X)
+              </span>
+              <h2 class="text-lg lg:text-xl font-extrabold text-white mb-3">
+                Struktur, Ciri &amp; Peranan Virus dalam Kehidupan
+              </h2>
+              <p class="text-xs lg:text-sm text-slate-300 leading-relaxed mb-4">
+                Peserta didik mampu menyelidiki karakteristik, struktur anatomi, dan keanekaragaman bentuk partikel virus melalui eksplorasi model 3D interaktif, serta menganalisis keterkaitan antara struktur tubuh virus dengan mekanisme infeksi sel inang dan upaya pencegahannya.
+              </p>
+            </div>
+            <div class="bg-slate-900/85 border border-violet-500/35 rounded-xl p-3.5">
+              <div class="text-xs font-bold text-violet-300 mb-1">💡 Pertanyaan Pemantik:</div>
+              <p class="text-xs text-slate-300 italic leading-relaxed">
+                "Mengapa virus disebut sebagai makhluk peralihan antara benda mati dan makhluk hidup, serta bagaimana perbedaan struktur anatomi virus (seperti Bakteriofag T4 dan SARS-CoV-2) menentukan cara virus menginfeksi sel inangnya?"
+              </p>
+            </div>
+          </div>
+
+          <!-- Kolom Kanan: 4 Kartu Tujuan Pembelajaran -->
+          <div class="col-span-7 flex flex-col justify-between gap-3">
+            <div class="grid grid-cols-2 gap-3 flex-1">
+              <div class="bg-slate-800/50 border border-slate-700/60 rounded-2xl p-4 flex flex-col justify-center">
+                <div class="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-400 font-extrabold flex items-center justify-center text-sm mb-2">1</div>
+                <h3 class="text-sm font-bold text-white mb-1">Mengidentifikasi Anatomi Virus 3D</h3>
+                <p class="text-xs text-slate-300 leading-relaxed">
+                  Mengamati dan mengidentifikasi bagian penyusun tubuh Bakteriofag T4, SARS-CoV-2, dan TMV secara tiga dimensi dari berbagai sudut pandang.
+                </p>
+              </div>
+              <div class="bg-slate-800/50 border border-slate-700/60 rounded-2xl p-4 flex flex-col justify-center">
+                <div class="w-8 h-8 rounded-lg bg-cyan-500/20 text-cyan-400 font-extrabold flex items-center justify-center text-sm mb-2">2</div>
+                <h3 class="text-sm font-bold text-white mb-1">Membedakan Struktur &amp; Komposisi</h3>
+                <p class="text-xs text-slate-300 leading-relaxed">
+                  Membandingkan struktur internal (DNA/RNA) dan eksternal (kapsid, amplop lipid, spike, serabut ekor) menggunakan mode Irisan dan Exploded View.
+                </p>
+              </div>
+              <div class="bg-slate-800/50 border border-slate-700/60 rounded-2xl p-4 flex flex-col justify-center">
+                <div class="w-8 h-8 rounded-lg bg-violet-500/20 text-violet-300 font-extrabold flex items-center justify-center text-sm mb-2">3</div>
+                <h3 class="text-sm font-bold text-white mb-1">Menjelaskan Fungsi Biologis</h3>
+                <p class="text-xs text-slate-300 leading-relaxed">
+                  Menghubungkan setiap struktur anatomi virus dengan peran biologisnya saat adsorpsi, penetrasi, serta replikasi di dalam sel inang.
+                </p>
+              </div>
+              <div class="bg-slate-800/50 border border-slate-700/60 rounded-2xl p-4 flex flex-col justify-center">
+                <div class="w-8 h-8 rounded-lg bg-amber-500/20 text-amber-300 font-extrabold flex items-center justify-center text-sm mb-2">4</div>
+                <h3 class="text-sm font-bold text-white mb-1">Menganalisis Pencegahan (HOTS)</h3>
+                <p class="text-xs text-slate-300 leading-relaxed">
+                  Mencatat hasil inspeksi pada LKPD interaktif dan menjelaskan alasan ilmiah efektivitas sabun terhadap virus beramplop lipid serta spesifisitas reseptor.
+                </p>
+              </div>
+            </div>
+
+            <div class="flex items-center justify-between bg-emerald-950/40 border border-emerald-500/30 rounded-xl px-4 py-2.5">
+              <span class="text-xs text-emerald-200 font-medium">Siap menjelajahi anatomi virus secara 3D atau mempelajari teorinya dulu?</span>
+              <div class="flex gap-2">
+                <button onclick="switchTab('teori')" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-bold text-white transition cursor-pointer">Baca Teori →</button>
+                <button onclick="switchTab('simulasi')" class="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-xs font-bold text-slate-950 transition cursor-pointer">Mulai Simulasi 3D 🧬</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================== TAB 2: TEORI ==================== -->
+      <section id="panel-teori" class="tab-panel hidden h-full w-full p-5 flex flex-col justify-between gap-3 animate-fade-in">
+        <!-- Ringkasan Ciri Umum Virus -->
+        <div class="bg-slate-800/60 border border-slate-700/70 rounded-2xl px-5 py-3 flex items-center justify-between gap-4">
+          <div>
+            <h2 class="text-sm lg:text-base font-extrabold text-emerald-400">Karakteristik Umum Partikel Virus (Virion)</h2>
+            <p class="text-xs text-slate-300 mt-0.5 leading-relaxed">
+              Virus bersifat <strong class="text-white">aseluler</strong> (bukan sel; tidak memiliki membran sel, sitoplasma, maupun ribosom), merupakan <strong class="text-cyan-300">parasit obligat intraseluler</strong> yang hanya dapat bereplikasi di dalam sel inang hidup, dan hanya memiliki satu jenis asam nukleat (<strong class="text-amber-300">DNA saja atau RNA saja</strong>) yang dilindungi selubung protein (<strong class="text-white">kapsid</strong>).
+            </p>
+          </div>
+          <div class="shrink-0 bg-slate-950/85 border border-slate-700 rounded-xl px-4 py-2 text-center">
+            <div class="text-[10px] text-slate-400 uppercase font-bold">Ukuran Virion</div>
+            <div class="font-mono text-xs lg:text-sm font-bold text-cyan-400 mt-0.5">20 – 300 nm</div>
+          </div>
+        </div>
+
+        <!-- 3 Kartu Perbandingan Bentuk Virus -->
+        <div class="grid grid-cols-3 gap-4 flex-1">
+          <!-- 1. Kompleks (Bakteriofag T4) -->
+          <div class="bg-gradient-to-b from-emerald-500/10 to-slate-800/60 border border-emerald-500/40 rounded-2xl p-4 flex flex-col justify-between">
+            <div>
+              <div class="flex items-center justify-between mb-2">
+                <span class="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[11px] font-bold">BENTUK KOMPLEKS</span>
+                <span class="font-mono text-[11px] font-bold text-amber-300">dsDNA</span>
+              </div>
+              <h3 class="text-sm font-extrabold text-white mb-1.5">Bakteriofag T4</h3>
+              <p class="text-xs text-slate-300 leading-relaxed mb-3">
+                Memiliki struktur simetri gabungan: kepala berbentuk <strong class="text-white">ikosahedral</strong> dan ekor silindris kontraktil yang khusus menginfeksi bakteri <em>Escherichia coli</em>.
+              </p>
+              <ul class="text-xs text-slate-200 space-y-1.5">
+                <li class="flex items-center gap-2"><span class="text-emerald-400">◈</span> <strong>Kepala Kapsid:</strong> Melindungi DNA ganda.</li>
+                <li class="flex items-center gap-2"><span class="text-cyan-400">◈</span> <strong>Selubung Ekor:</strong> Berkontraksi menyuntik DNA.</li>
+                <li class="flex items-center gap-2"><span class="text-violet-400">◈</span> <strong>Serabut Ekor:</strong> Mengenali reseptor dinding sel bakteri.</li>
+              </ul>
+            </div>
+            <div class="mt-2 bg-slate-950/75 rounded-xl p-2 font-mono text-[10px] text-emerald-200 border border-slate-700/60">
+              Inang: Bakteri (Prokariotik) • Tanpa Amplop Lipid
+            </div>
+          </div>
+
+          <!-- 2. Bulat Beramplop (SARS-CoV-2) -->
+          <div class="bg-gradient-to-b from-violet-500/10 to-slate-800/60 border border-violet-500/40 rounded-2xl p-4 flex flex-col justify-between">
+            <div>
+              <div class="flex items-center justify-between mb-2">
+                <span class="px-2.5 py-0.5 rounded-full bg-violet-500/20 text-violet-300 text-[11px] font-bold">BULAT BERAMPLOP</span>
+                <span class="font-mono text-[11px] font-bold text-rose-300">ssRNA (+)</span>
+              </div>
+              <h3 class="text-sm font-extrabold text-white mb-1.5">SARS-CoV-2 (Coronavirus)</h3>
+              <p class="text-xs text-slate-300 leading-relaxed mb-3">
+                Berbentuk sferis (bulat) yang dibungkus <strong class="text-white">amplop lipid ganda</strong> dari membran sel inang dengan tonjolan glikoprotein mirip mahkota (<em>corona</em>).
+              </p>
+              <ul class="text-xs text-slate-200 space-y-1.5">
+                <li class="flex items-center gap-2"><span class="text-rose-400">◈</span> <strong>Glikoprotein Spike (S):</strong> Menempel pada reseptor ACE2.</li>
+                <li class="flex items-center gap-2"><span class="text-violet-400">◈</span> <strong>Amplop Lipid:</strong> Lapisan lemak rentan terhadap sabun.</li>
+                <li class="flex items-center gap-2"><span class="text-emerald-400">◈</span> <strong>RNA &amp; Nukleokapsid:</strong> Pembawa kode genetik virus.</li>
+              </ul>
+            </div>
+            <div class="mt-2 bg-slate-950/75 rounded-xl p-2 font-mono text-[10px] text-violet-200 border border-slate-700/60">
+              Inang: Sel Epitel Manusia • Beramplop Lipid
+            </div>
+          </div>
+
+          <!-- 3. Heliks / Batang (TMV) -->
+          <div class="bg-gradient-to-b from-cyan-500/10 to-slate-800/60 border border-cyan-500/40 rounded-2xl p-4 flex flex-col justify-between">
+            <div>
+              <div class="flex items-center justify-between mb-2">
+                <span class="px-2.5 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 text-[11px] font-bold">HELIKS / BATANG</span>
+                <span class="font-mono text-[11px] font-bold text-cyan-300">ssRNA (+)</span>
+              </div>
+              <h3 class="text-sm font-extrabold text-white mb-1.5">Tobacco Mosaic Virus (TMV)</h3>
+              <p class="text-xs text-slate-300 leading-relaxed mb-3">
+                Virus pertama yang ditemukan dalam sejarah biologi (Ivanovsky &amp; Beijerinck). Berbentuk <strong class="text-white">batang silindris</strong> kaku dengan rongga tengah.
+              </p>
+              <ul class="text-xs text-slate-200 space-y-1.5">
+                <li class="flex items-center gap-2"><span class="text-cyan-400">◈</span> <strong>Kapsomer Heliks:</strong> ±2.130 subunit protein tersusun spiral.</li>
+                <li class="flex items-center gap-2"><span class="text-amber-400">◈</span> <strong>Untai RNA Spiral:</strong> Terlindung rapat di rongga tengah.</li>
+                <li class="flex items-center gap-2"><span class="text-emerald-400">◈</span> <strong>Gejala:</strong> Bercak kuning mosaik pada daun tembakau.</li>
+              </ul>
+            </div>
+            <div class="mt-2 bg-slate-950/75 rounded-xl p-2 font-mono text-[10px] text-cyan-200 border border-slate-700/60">
+              Inang: Tumbuhan (Tembakau/Solanaceae) • Virus Telanjang
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================== TAB 3: PROSEDUR ==================== -->
+      <section id="panel-prosedur" class="tab-panel hidden h-full w-full p-5 flex flex-col justify-between gap-3 animate-fade-in">
+        <div class="flex items-center justify-between">
+          <div>
+            <h2 class="text-base lg:text-lg font-extrabold text-white">Prosedur Praktikum Eksplorasi 3D</h2>
+            <p class="text-xs text-slate-400">Ikuti 6 langkah kerja berikut untuk menginspeksi seluruh struktur anatomi 3 jenis virus secara teliti.</p>
+          </div>
+          <button onclick="switchTab('simulasi')" class="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-xs font-bold text-slate-950 shadow-lg shadow-emerald-500/20 transition cursor-pointer">
+            Buka Ruang Simulasi 3D →
+          </button>
+        </div>
+
+        <div class="grid grid-cols-3 grid-rows-2 gap-3.5 flex-1">
+          <div class="bg-slate-800/60 border border-slate-700/70 rounded-2xl p-4 flex flex-col justify-between">
+            <div class="flex items-center gap-2.5">
+              <span class="w-7 h-7 rounded-full bg-emerald-500 text-slate-950 font-extrabold text-xs flex items-center justify-center shrink-0">1</span>
+              <h3 class="text-xs lg:text-sm font-bold text-white">Pilih Model Virus 3D</h3>
+            </div>
+            <p class="text-xs text-slate-300 leading-relaxed mt-2">
+              Pada tab <strong>Simulasi</strong>, pilih salah satu dari 3 model 3D di panel kanan: <strong>Bakteriofag T4</strong> (kompleks), <strong>SARS-CoV-2</strong> (bulat beramplop), atau <strong>TMV</strong> (heliks).
+            </p>
+          </div>
+
+          <div class="bg-slate-800/60 border border-slate-700/70 rounded-2xl p-4 flex flex-col justify-between">
+            <div class="flex items-center gap-2.5">
+              <span class="w-7 h-7 rounded-full bg-cyan-500 text-slate-950 font-extrabold text-xs flex items-center justify-center shrink-0">2</span>
+              <h3 class="text-xs lg:text-sm font-bold text-white">Putar &amp; Zoom 360°</h3>
+            </div>
+            <p class="text-xs text-slate-300 leading-relaxed mt-2">
+              Geser (<em>drag</em>) menggunakan mouse atau sentuhan jari pada viewport 3D untuk memutar virus 360°. Gunakan <em>scroll</em> mouse atau tombol <strong>Zoom + / −</strong> untuk memperbesar detail.
+            </p>
+          </div>
+
+          <div class="bg-slate-800/60 border border-slate-700/70 rounded-2xl p-4 flex flex-col justify-between">
+            <div class="flex items-center gap-2.5">
+              <span class="w-7 h-7 rounded-full bg-violet-500 text-white font-extrabold text-xs flex items-center justify-center shrink-0">3</span>
+              <h3 class="text-xs lg:text-sm font-bold text-white">Uji Mode Irisan &amp; Exploded</h3>
+            </div>
+            <p class="text-xs text-slate-300 leading-relaxed mt-2">
+              Aktifkan mode <strong>Irisan/Transparan (Cutaway)</strong> untuk melihat materi genetik DNA/RNA di dalam kapsid, serta <strong>Mode Ledakan (Exploded View)</strong> untuk memisahkan tiap komponen.
+            </p>
+          </div>
+
+          <div class="bg-slate-800/60 border border-slate-700/70 rounded-2xl p-4 flex flex-col justify-between">
+            <div class="flex items-center gap-2.5">
+              <span class="w-7 h-7 rounded-full bg-amber-500 text-slate-950 font-extrabold text-xs flex items-center justify-center shrink-0">4</span>
+              <h3 class="text-xs lg:text-sm font-bold text-white">Klik Bagian untuk Inspeksi</h3>
+            </div>
+            <p class="text-xs text-slate-300 leading-relaxed mt-2">
+              Klik langsung bagian tubuh virus pada layar 3D atau pilih dari daftar struktur di panel kanan untuk menyorot (<em>highlight</em>) bagian tersebut dan membaca komposisi serta fungsinya.
+            </p>
+          </div>
+
+          <div class="bg-slate-800/60 border border-slate-700/70 rounded-2xl p-4 flex flex-col justify-between">
+            <div class="flex items-center gap-2.5">
+              <span class="w-7 h-7 rounded-full bg-emerald-500 text-slate-950 font-extrabold text-xs flex items-center justify-center shrink-0">5</span>
+              <h3 class="text-xs lg:text-sm font-bold text-white">Catat ke LKPD</h3>
+            </div>
+            <p class="text-xs text-slate-300 leading-relaxed mt-2">
+              Setelah menginspeksi suatu struktur, klik tombol <strong>📝 Catat ke LKPD</strong> untuk menandai struktur tersebut sebagai <em>Teramati</em> pada tabel pengamatan LKPD.
+            </p>
+          </div>
+
+          <div class="bg-slate-800/60 border border-slate-700/70 rounded-2xl p-4 flex flex-col justify-between">
+            <div class="flex items-center gap-2.5">
+              <span class="w-7 h-7 rounded-full bg-rose-500 text-white font-extrabold text-xs flex items-center justify-center shrink-0">6</span>
+              <h3 class="text-xs lg:text-sm font-bold text-white">Analisis HOTS &amp; Cetak</h3>
+            </div>
+            <p class="text-xs text-slate-300 leading-relaxed mt-2">
+              Buka tab <strong>LKPD</strong>, cocokkan 8 struktur virus dengan fungsi biologisnya, klik <strong>Periksa</strong>, jawab 2 soal HOTS dan Kesimpulan, lalu <strong>Cetak / Simpan PDF</strong>.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================== TAB 4: SIMULASI 3D (UTAMA) ==================== -->
+      <section id="panel-simulasi" class="tab-panel h-full w-full p-3 grid grid-cols-12 gap-3 animate-fade-in">
+
+        <!-- AREA KIRI (8 KOLOM): VIEWPORT 3D THREE.JS -->
+        <div class="col-span-8 relative bg-slate-950 rounded-2xl border border-slate-700/80 overflow-hidden flex flex-col shadow-inner">
+          <!-- Info Bar Atas Viewport 3D -->
+          <div class="absolute top-2.5 left-3 right-3 z-10 flex items-center justify-between gap-2 pointer-events-none">
+            <div class="flex items-center gap-2 bg-slate-900/85 backdrop-blur-md border border-slate-700/80 px-3 py-1.5 rounded-xl min-w-0">
+              <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shrink-0"></span>
+              <span id="sim-virus-title" class="text-xs font-extrabold text-white truncate">Bakteriofag T4</span>
+              <span id="sim-virus-shape" class="text-[10px] font-semibold text-cyan-300 bg-cyan-500/15 border border-cyan-500/30 px-2 py-0.5 rounded-md shrink-0">Kompleks</span>
+              <span id="sim-virus-acid" class="text-[10px] font-mono font-bold text-amber-300 bg-amber-500/15 border border-amber-500/30 px-2 py-0.5 rounded-md shrink-0">dsDNA</span>
+            </div>
+
+            <!-- Kontrol Kamera Mengambang Kanan Atas -->
+            <div class="flex items-center gap-1 pointer-events-auto">
+              <button onclick="toggleAutoRotate()" id="btn-autorotate" title="Putar Otomatis"
+                class="px-2 py-1 rounded-lg bg-emerald-500/20 border border-emerald-400/50 text-emerald-300 text-[10px] font-bold backdrop-blur-md hover:bg-emerald-500/30 transition cursor-pointer">
+                ⟳ Auto: ON
+              </button>
+              <button onclick="zoomCamera(-1.1)" title="Perbesar (Zoom In)"
+                class="w-7 h-7 rounded-lg bg-slate-900/85 hover:bg-slate-800 border border-slate-700 text-slate-200 text-xs font-extrabold backdrop-blur-md transition cursor-pointer">+</button>
+              <button onclick="zoomCamera(1.1)" title="Perkecil (Zoom Out)"
+                class="w-7 h-7 rounded-lg bg-slate-900/85 hover:bg-slate-800 border border-slate-700 text-slate-200 text-xs font-extrabold backdrop-blur-md transition cursor-pointer">−</button>
+              <button onclick="resetCamera()" title="Reset Posisi Kamera"
+                class="px-2 py-1 rounded-lg bg-slate-900/85 hover:bg-slate-800 border border-slate-700 text-slate-300 text-[10px] font-bold backdrop-blur-md transition cursor-pointer">
+                🎯 Reset
+              </button>
+            </div>
+          </div>
+
+          <!-- Petunjuk Interaksi Singkat -->
+          <div class="absolute top-12 left-3 z-10 pointer-events-none">
+            <span class="text-[10px] text-slate-400 bg-slate-950/60 px-2 py-0.5 rounded-md border border-slate-800">
+              🖱️ Drag: Putar 360° • Scroll: Zoom • Klik Struktur: Inspeksi
+            </span>
+          </div>
+
+          <!-- Container WebGL Three.js -->
+          <div id="three-container" class="w-full h-full flex-1 relative"></div>
+
+          <!-- Overlay Kartu Info Detail Bagian Terpilih di Bawah Viewport -->
+          <div class="absolute bottom-2.5 left-3 right-3 z-10 bg-slate-900/90 backdrop-blur-md border border-emerald-500/35 rounded-xl px-3.5 py-2.5 flex items-center justify-between gap-3 pointer-events-none">
+            <div class="min-w-0 flex-1">
+              <div class="flex items-center gap-2 mb-0.5">
+                <span class="text-[10px] font-extrabold uppercase tracking-wider text-emerald-400">Inspeksi Struktur:</span>
+                <span id="detail-part-name" class="text-xs lg:text-sm font-extrabold text-white truncate">Klik bagian virus pada 3D atau panel kanan</span>
+                <span id="detail-part-chem" class="hidden sm:inline-block text-[10px] font-mono px-2 py-0.5 rounded bg-violet-500/20 border border-violet-500/40 text-violet-200 shrink-0">—</span>
+              </div>
+              <p id="detail-part-func" class="text-[11px] text-slate-300 leading-snug line-clamp-2">
+                Gunakan mode Irisan (Cutaway) untuk melihat DNA/RNA di bagian dalam, atau Mode Ledakan (Exploded View) untuk memisahkan komponen penyusun virus.
+              </p>
+            </div>
+            <div id="detail-lkpd-tag" class="hidden shrink-0 px-2.5 py-1 rounded-lg bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 text-[10px] font-bold">
+              ✓ Tercatat di LKPD
+            </div>
+          </div>
+        </div>
+
+        <!-- AREA KANAN (4 KOLOM): PANEL KONTROL 3D INTERAKTIF -->
+        <div class="col-span-4 flex flex-col justify-between gap-2 overflow-hidden">
+
+          <!-- 1. Pilih Model Virus 3D -->
+          <div class="bg-slate-800/60 border border-slate-700/70 rounded-2xl p-2.5 flex flex-col gap-1.5 shrink-0">
+            <h3 class="text-[11px] font-extrabold uppercase tracking-wider text-emerald-400">1. Pilih Model Virus 3D</h3>
+            <div class="grid grid-cols-3 gap-1.5">
+              <button onclick="selectVirus('t4')" id="vbtn-t4"
+                class="p-2 rounded-xl border text-center transition-all cursor-pointer bg-emerald-500/20 border-emerald-400 text-white shadow-sm">
+                <div class="text-[11px] font-extrabold leading-tight">Bakteriofag T4</div>
+                <div class="text-[9px] text-emerald-200 mt-0.5">Kompleks</div>
+              </button>
+              <button onclick="selectVirus('sars')" id="vbtn-sars"
+                class="p-2 rounded-xl border text-center transition-all cursor-pointer bg-slate-900/70 hover:bg-slate-800 border-slate-700 text-slate-300">
+                <div class="text-[11px] font-extrabold leading-tight">SARS-CoV-2</div>
+                <div class="text-[9px] text-slate-400 mt-0.5">Beramplop</div>
+              </button>
+              <button onclick="selectVirus('tmv')" id="vbtn-tmv"
+                class="p-2 rounded-xl border text-center transition-all cursor-pointer bg-slate-900/70 hover:bg-slate-800 border-slate-700 text-slate-300">
+                <div class="text-[11px] font-extrabold leading-tight">TMV</div>
+                <div class="text-[9px] text-slate-400 mt-0.5">Heliks</div>
+              </button>
+            </div>
+          </div>
+
+          <!-- 2. Mode Tampilan 3D -->
+          <div class="bg-slate-800/60 border border-slate-700/70 rounded-2xl p-2.5 flex flex-col gap-1.5 shrink-0">
+            <h3 class="text-[11px] font-extrabold uppercase tracking-wider text-cyan-400">2. Mode Tampilan 3D</h3>
+            <div class="grid grid-cols-3 gap-1.5">
+              <button onclick="setViewMode('normal')" id="mbtn-normal"
+                class="py-1.5 px-2 rounded-xl border text-[11px] font-bold transition cursor-pointer bg-cyan-500/20 border-cyan-400 text-white">
+                🧊 Utuh
+              </button>
+              <button onclick="setViewMode('cutaway')" id="mbtn-cutaway"
+                class="py-1.5 px-2 rounded-xl border text-[11px] font-bold transition cursor-pointer bg-slate-900/70 hover:bg-slate-800 border-slate-700 text-slate-300">
+                🔍 Irisan
+              </button>
+              <button onclick="setViewMode('exploded')" id="mbtn-exploded"
+                class="py-1.5 px-2 rounded-xl border text-[11px] font-bold transition cursor-pointer bg-slate-900/70 hover:bg-slate-800 border-slate-700 text-slate-300">
+                💥 Ledakan
+              </button>
+            </div>
+          </div>
+
+          <!-- 3. Daftar Struktur Anatomi (Klik untuk Sorot 3D) -->
+          <div class="bg-slate-800/60 border border-slate-700/70 rounded-2xl p-2.5 flex flex-col gap-1.5 flex-1 min-h-0">
+            <div class="flex items-center justify-between shrink-0">
+              <h3 class="text-[11px] font-extrabold uppercase tracking-wider text-violet-300">3. Inspeksi Bagian Anatomi</h3>
+              <span class="text-[9px] text-slate-400">Klik untuk sorot 3D</span>
+            </div>
+            <div id="parts-list" class="grid grid-cols-2 gap-1.5 flex-1 content-start overflow-y-auto no-scrollbar">
+              <!-- Diisi dinamis oleh JS sesuai virus aktif -->
+            </div>
+          </div>
+
+          <!-- 4. Aksi Catat ke LKPD & Reset -->
+          <div class="bg-slate-800/60 border border-slate-700/70 rounded-2xl p-2.5 flex flex-col gap-1.5 shrink-0">
+            <div class="grid grid-cols-5 gap-2">
+              <button onclick="recordSelectedPartToLKPD()"
+                class="col-span-3 flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-xs shadow-lg shadow-emerald-500/20 transition cursor-pointer">
+                📝 Catat ke LKPD
+              </button>
+              <button onclick="resetSimulation()"
+                class="col-span-2 flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/50 text-rose-300 font-bold text-xs transition cursor-pointer">
+                🔄 Reset
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================== TAB 5: LKPD INTERAKTIF ==================== -->
+      <section id="panel-lkpd" class="tab-panel hidden h-full w-full p-4 flex flex-col justify-between gap-2.5 animate-fade-in">
+        <!-- Header LKPD -->
+        <div class="flex items-center justify-between gap-3 shrink-0">
+          <div>
+            <h2 class="text-sm lg:text-base font-extrabold text-white">LKPD Interaktif — Identifikasi Anatomi Virus, Analisis HOTS &amp; Kesimpulan</h2>
+            <p class="text-[11px] text-slate-400">Inspeksi &amp; catat struktur dari Simulasi 3D, pilih fungsi biologis yang sesuai, jawab soal HOTS, lalu cetak A4.</p>
+          </div>
+          <div class="flex items-center gap-1.5 shrink-0">
+            <div id="lkpd-score-box" class="hidden px-2.5 py-1 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-extrabold">
+              Skor: 0/8
+            </div>
+            <button onclick="checkLKPDAnswers()" class="px-2.5 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-extrabold transition cursor-pointer">
+              ✓ Periksa
+            </button>
+            <button onclick="printLKPD()" class="px-2.5 py-1.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 text-xs font-extrabold transition cursor-pointer">
+              🖨️ Cetak LKPD
+            </button>
+            <button onclick="copyLKPDSummary()" class="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 text-xs font-bold transition cursor-pointer">
+              📋 Salin
+            </button>
+            <button onclick="resetLKPD()" class="px-2.5 py-1.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/40 text-rose-300 text-xs font-bold transition cursor-pointer">
+              Reset
+            </button>
+          </div>
+        </div>
+
+        <!-- Konten LKPD 2 Kolom (Tetap 16:9 Tanpa Scroll) -->
+        <div class="flex-1 min-h-0 grid grid-cols-12 gap-3">
+          <!-- Kolom Kiri (7 Kolom): Tabel 8 Struktur Utama Virus -->
+          <div class="col-span-7 bg-slate-800/50 border border-slate-700/70 rounded-2xl overflow-hidden flex flex-col">
+            <table class="w-full text-left border-collapse h-full">
+              <thead>
+                <tr class="bg-slate-950/85 text-[10px] lg:text-[11px] uppercase text-emerald-400 border-b border-slate-700">
+                  <th class="py-1.5 px-2 w-7 text-center">No</th>
+                  <th class="py-1.5 px-2">Struktur Anatomi</th>
+                  <th class="py-1.5 px-1.5 text-center w-20">Observasi</th>
+                  <th class="py-1.5 px-2 text-center">Pilihan Fungsi Biologis</th>
+                  <th class="py-1.5 px-1.5 text-center w-14">Status</th>
+                </tr>
+              </thead>
+              <tbody id="lkpd-table-body" class="divide-y divide-slate-700/50 text-[10px] lg:text-[11px]">
+                <!-- Diisi otomatis via JavaScript -->
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Kolom Kanan (5 Kolom): Identitas, 2 Pertanyaan HOTS & Kesimpulan -->
+          <div class="col-span-5 flex flex-col justify-between gap-2 min-h-0">
+            <!-- Identitas Siswa -->
+            <div class="grid grid-cols-3 gap-2 bg-slate-800/60 border border-slate-700/70 rounded-xl p-2 shrink-0">
+              <input id="lkpd-name" type="text" placeholder="Nama Siswa / Kelompok..."
+                class="col-span-2 bg-slate-950/70 border border-slate-700 rounded-lg px-2.5 py-1 text-[11px] text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500" />
+              <input id="lkpd-class" type="text" placeholder="Kelas (X-...)"
+                class="col-span-1 bg-slate-950/70 border border-slate-700 rounded-lg px-2.5 py-1 text-[11px] text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500" />
+            </div>
+
+            <!-- Pertanyaan Analisis HOTS (C4-C5) -->
+            <div class="flex-1 bg-slate-800/60 border border-violet-500/40 rounded-2xl p-2.5 flex flex-col justify-between gap-2 min-h-0">
+              <div class="flex items-center justify-between shrink-0">
+                <span class="text-[11px] font-extrabold uppercase tracking-wider text-violet-300">🧠 Pertanyaan Analisis HOTS</span>
+                <span class="text-[9px] px-2 py-0.5 rounded-full bg-violet-500/20 text-violet-200 font-bold">C4–C5</span>
+              </div>
+
+              <!-- HOTS 1: Spesifisitas Reseptor -->
+              <div class="flex-1 flex flex-col gap-1 min-h-0">
+                <label for="lkpd-hots-1" class="text-[10px] lg:text-[11px] text-slate-200 leading-snug">
+                  <strong class="text-cyan-300">1.</strong> Mengapa <strong class="text-white">Bakteriofag T4</strong> tidak dapat menginfeksi sel manusia, dan mengapa mutasi pada <strong class="text-white">Glikoprotein Spike</strong> SARS-CoV-2 memengaruhi tingkat penularannya?
+                </label>
+                <textarea id="lkpd-hots-1" placeholder="Analisis berdasarkan kesesuaian kunci-gembok (lock & key) antara serabut ekor/spike dan reseptor sel inang..."
+                  class="flex-1 w-full resize-none bg-slate-950/70 border border-slate-700 rounded-lg px-2.5 py-1.5 text-[11px] text-white placeholder-slate-500 focus:outline-none focus:border-violet-400 no-scrollbar"></textarea>
+              </div>
+
+              <!-- HOTS 2: Efektivitas Sabun pada Amplop Lipid -->
+              <div class="flex-1 flex flex-col gap-1 min-h-0">
+                <label for="lkpd-hots-2" class="text-[10px] lg:text-[11px] text-slate-200 leading-snug">
+                  <strong class="text-cyan-300">2.</strong> Mengapa mencuci tangan dengan <strong class="text-white">sabun</strong> selama 20 detik sangat efektif melumpuhkan <strong class="text-white">SARS-CoV-2</strong> dibandingkan virus tanpa amplop?
+                </label>
+                <textarea id="lkpd-hots-2" placeholder="Evaluasi struktur amplop lipid ganda dan sifat molekul amfipatik sabun..."
+                  class="flex-1 w-full resize-none bg-slate-950/70 border border-slate-700 rounded-lg px-2.5 py-1.5 text-[11px] text-white placeholder-slate-500 focus:outline-none focus:border-violet-400 no-scrollbar"></textarea>
+              </div>
+            </div>
+
+            <!-- Kesimpulan Siswa -->
+            <div class="bg-slate-800/60 border border-emerald-500/40 rounded-xl p-2.5 flex flex-col gap-1 shrink-0">
+              <label for="lkpd-conclusion" class="text-[11px] font-extrabold text-emerald-400">✍️ Kesimpulan:</label>
+              <textarea id="lkpd-conclusion" rows="2" placeholder="Tuliskan kesimpulanmu mengenai hubungan struktur anatomi virus dengan cara infeksi & pencegahannya..."
+                class="w-full resize-none bg-slate-950/70 border border-slate-700 rounded-lg px-2.5 py-1.5 text-[11px] text-white placeholder-slate-500 focus:outline-none focus:border-emerald-400 no-scrollbar"></textarea>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================== TAB 6: PENGEMBANG ==================== -->
+      <section id="panel-pengembang" class="tab-panel hidden h-full w-full p-5 flex items-center justify-center animate-fade-in">
+        <div class="grid grid-cols-12 gap-5 w-full max-w-4xl">
+          <!-- Kartu Profil Pengembang -->
+          <div class="col-span-5 bg-slate-800/60 border border-slate-700/70 rounded-2xl p-6 flex flex-col items-center text-center justify-center">
+            <div class="w-20 h-20 rounded-2xl bg-gradient-to-br from-emerald-500 via-cyan-500 to-violet-600 flex items-center justify-center text-3xl shadow-xl shadow-emerald-500/20 mb-4">
+              🧬
+            </div>
+            <h2 class="text-lg font-extrabold text-white">Tim MGMP Biologi</h2>
+            <p class="text-xs text-emerald-400 font-semibold mt-1">SMAN 1 Boja</p>
+            <div class="mt-4 w-full space-y-2 text-left bg-slate-900/70 rounded-xl p-3.5 border border-slate-700/60 text-xs">
+              <div class="flex justify-between"><span class="text-slate-400">Instansi</span><span class="font-bold text-white">SMAN 1 Boja</span></div>
+              <div class="flex justify-between"><span class="text-slate-400">Mata Pelajaran</span><span class="font-bold text-white">Biologi</span></div>
+              <div class="flex justify-between"><span class="text-slate-400">Fase / Kelas</span><span class="font-bold text-white">Fase E / Kelas X</span></div>
+              <div class="flex justify-between"><span class="text-slate-400">Format Layar</span><span class="font-bold text-emerald-400">Full Screen 16:9</span></div>
+              <div class="flex justify-between"><span class="text-slate-400">Versi Aplikasi</span><span class="font-mono font-bold text-cyan-300">v1.0 WebGL 3D</span></div>
+            </div>
+          </div>
+
+          <!-- Kartu Teknologi & Referensi -->
+          <div class="col-span-7 bg-slate-800/60 border border-slate-700/70 rounded-2xl p-6 flex flex-col justify-between">
+            <div>
+              <h3 class="text-base font-extrabold text-white mb-2">Tentang Aplikasi Lab Maya 3D</h3>
+              <p class="text-xs text-slate-300 leading-relaxed mb-4">
+                Laboratorium maya biologi molekuler ini menghadirkan visualisasi tiga dimensi interaktif dari partikel virus berukuran nanometer (Bakteriofag T4, SARS-CoV-2, dan TMV) yang biasanya hanya dapat dilihat melalui mikroskop elektron. Siswa dapat memutar, membedah lapisan luar (<em>Cutaway</em>), dan memisahkan komponen (<em>Exploded View</em>) secara aman.
+              </p>
+
+              <h4 class="text-xs font-bold uppercase tracking-wider text-emerald-400 mb-2">Fitur &amp; Teknologi</h4>
+              <div class="grid grid-cols-2 gap-2 text-xs text-slate-200 mb-4">
+                <div class="bg-slate-900/70 border border-slate-700/60 rounded-xl px-3 py-2">🧊 Three.js WebGL 60 FPS</div>
+                <div class="bg-slate-900/70 border border-slate-700/60 rounded-xl px-3 py-2">🔊 Efek Suara Web Audio API</div>
+                <div class="bg-slate-900/70 border border-slate-700/60 rounded-xl px-3 py-2">🔍 Cutaway &amp; Exploded View 3D</div>
+                <div class="bg-slate-900/70 border border-slate-700/60 rounded-xl px-3 py-2">📝 LKPD HOTS &amp; Cetak A4</div>
+              </div>
+            </div>
+
+            <div class="bg-slate-900/80 border border-slate-700/60 rounded-xl p-3 text-[11px] text-slate-400 leading-relaxed">
+              <strong class="text-slate-200">Referensi Kurikulum:</strong> Buku Ilmu Pengetahuan Alam (Biologi) SMA Kelas X Kurikulum Merdeka (Kemendikbudristek) serta Urry, L. A. dkk. <em>Campbell Biology</em> (Bab Viruses).
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- Lembar Khusus Cetak LKPD A4 (Hanya Tampil Saat Print / Save as PDF) -->
+  <div id="print-lkpd-sheet" class="hidden"></div>
+
+  <!-- ==================== JAVASCRIPT: THREE.JS 3D, WEB AUDIO API & LKPD ==================== -->
+  <script>
+    /**
+     * ============================================================================
+     * 1. DATABASE ANATOMI 3 VIRUS & 8 ITEM LKPD
+     * ============================================================================
+     */
+    const VIRUS_DB = {
+      t4: {
+        id: 't4',
+        name: 'Bakteriofag T4',
+        shape: 'Kompleks',
+        acid: 'dsDNA',
+        parts: [
+          {
+            id: 'kapsid',
+            lkpdId: 'kapsid',
+            name: 'Kepala / Kapsid',
+            chem: 'Protein Kapsomer',
+            func: 'Melindungi materi genetik (DNA) dari kerusakan fisik, enzimatik, dan lingkungan luar.',
+            color: '#10b981',
+          },
+          {
+            id: 'dna_rna',
+            lkpdId: 'dna_rna',
+            name: 'Materi Genetik (DNA)',
+            chem: 'Asam Deoksiribonukleat (dsDNA)',
+            func: 'Menyimpan informasi genetik untuk mengendalikan sintesis protein dan replikasi virus di sel inang.',
+            color: '#facc15',
+          },
+          {
+            id: 'leher',
+            lkpdId: null,
+            name: 'Leher (Collar)',
+            chem: 'Protein Struktural',
+            func: 'Menghubungkan kepala kapsid dengan selubung ekor serta menjadi saluran keluarnya DNA.',
+            color: '#22d3ee',
+          },
+          {
+            id: 'selubung_ekor',
+            lkpdId: 'selubung_ekor',
+            name: 'Selubung Ekor (Sheath)',
+            chem: 'Protein Kontraktil',
+            func: 'Berkontraksi seperti jarum suntik untuk mendorong dan menginjeksikan DNA virus ke dalam sel bakteri.',
+            color: '#06b6d4',
+          },
+          {
+            id: 'papan_dasar',
+            lkpdId: 'papan_dasar',
+            name: 'Papan Dasar & Jarum',
+            chem: 'Protein & Enzim Lisozim',
+            func: 'Menjangkarkan virus di permukaan bakteri dan melubangi dinding sel inang saat fase penetrasi.',
+            color: '#a78bfa',
+          },
+          {
+            id: 'serabut_ekor',
+            lkpdId: 'serabut_ekor',
+            name: 'Serabut Ekor (Tail Fibers)',
+            chem: 'Protein Reseptor',
+            func: 'Mengenali dan melekat secara spesifik pada reseptor permukaan dinding sel bakteri inang (adsorpsi).',
+            color: '#38bdf8',
+          },
+        ],
+      },
+      sars: {
+        id: 'sars',
+        name: 'SARS-CoV-2 (Coronavirus)',
+        shape: 'Bulat Beramplop',
+        acid: 'ssRNA (+)',
+        parts: [
+          {
+            id: 'amplop_lipid',
+            lkpdId: 'amplop_lipid',
+            name: 'Amplop Lipid (Envelope)',
+            chem: 'Fosfolipid Bilayer',
+            func: 'Membungkus kapsid virus, membantu fusi dengan membran sel inang, dan mudah rusak oleh sabun.',
+            color: '#8b5cf6',
+          },
+          {
+            id: 'spike',
+            lkpdId: 'spike',
+            name: 'Glikoprotein Spike (S)',
+            chem: 'Glikoprotein Trimer',
+            func: 'Menempel secara spesifik pada reseptor ACE2 sel manusia sebagai kunci masuk infeksi.',
+            color: '#f43f5e',
+          },
+          {
+            id: 'protein_m',
+            lkpdId: null,
+            name: 'Protein Membran (M)',
+            chem: 'Protein Transmembran',
+            func: 'Memberi bentuk bulat stabil pada amplop virus dan membantu perakitan virion baru.',
+            color: '#38bdf8',
+          },
+          {
+            id: 'dna_rna',
+            lkpdId: 'dna_rna',
+            name: 'RNA & Nukleokapsid',
+            chem: 'ssRNA (+) & Protein N',
+            func: 'Membawa kode genetik virus yang langsung diterjemahkan oleh ribosom sel inang untuk replikasi.',
+            color: '#34d399',
+          },
+        ],
+      },
+      tmv: {
+        id: 'tmv',
+        name: 'Tobacco Mosaic Virus (TMV)',
+        shape: 'Heliks / Batang',
+        acid: 'ssRNA (+)',
+        parts: [
+          {
+            id: 'kapsomer',
+            lkpdId: 'kapsomer',
+            name: 'Kapsomer Heliks',
+            chem: '±2.130 Subunit Protein',
+            func: 'Tersusun spiral membentuk batang silindris kokoh yang melindungi untai RNA di rongga tengahnya.',
+            color: '#06b6d4',
+          },
+          {
+            id: 'dna_rna',
+            lkpdId: 'dna_rna',
+            name: 'Untai RNA Spiral',
+            chem: 'Asam Ribonukleat (ssRNA)',
+            func: 'Membawa informasi genetik pengkode replikasi virus di dalam sel daun tumbuhan tembakau.',
+            color: '#facc15',
+          },
+        ],
+      },
+    };
+
+    const LKPD_FUNCTIONS = [
+      { code: 'F1', text: 'Melindungi materi genetik (kapsid kepala)' },
+      { code: 'F2', text: 'Pembawa kode genetik & kendali replikasi' },
+      { code: 'F3', text: 'Mengenali reseptor dinding sel bakteri' },
+      { code: 'F4', text: 'Berkontraksi menginjeksi DNA ke inang' },
+      { code: 'F5', text: 'Menjangkar & melubangi dinding sel inang' },
+      { code: 'F6', text: 'Menempel pada reseptor ACE2 sel inang' },
+      { code: 'F7', text: 'Lapisan lemak pembungkus (rentan sabun)' },
+      { code: 'F8', text: 'Subunit protein spiral pelindung RNA batang' },
+    ];
+
+    const LKPD_ITEMS = [
+      { id: 'kapsid', name: 'Kepala / Kapsid', virusTag: 'Fag T4', correctCode: 'F1' },
+      { id: 'dna_rna', name: 'Materi Genetik (DNA/RNA)', virusTag: 'Semua', correctCode: 'F2' },
+      { id: 'serabut_ekor', name: 'Serabut Ekor', virusTag: 'Fag T4', correctCode: 'F3' },
+      { id: 'selubung_ekor', name: 'Selubung Ekor', virusTag: 'Fag T4', correctCode: 'F4' },
+      { id: 'papan_dasar', name: 'Papan Dasar & Jarum', virusTag: 'Fag T4', correctCode: 'F5' },
+      { id: 'spike', name: 'Glikoprotein Spike (S)', virusTag: 'SARS-CoV-2', correctCode: 'F6' },
+      { id: 'amplop_lipid', name: 'Amplop Lipid', virusTag: 'SARS-CoV-2', correctCode: 'F7' },
+      { id: 'kapsomer', name: 'Kapsomer Heliks', virusTag: 'TMV', correctCode: 'F8' },
+    ];
+
+    /**
+     * ============================================================================
+     * 2. STATE GLOBAL APLIKASI
+     * ============================================================================
+     */
+    const state = {
+      activeTab: 'simulasi',
+      soundEnabled: true,
+      activeVirus: 't4',
+      viewMode: 'normal', // 'normal' | 'cutaway' | 'exploded'
+      selectedPartId: null,
+      autoRotate: true,
+      lkpdObserved: {}, // { lkpdId: true }
+      lkpdAnswers: {},  // { lkpdId: 'F1'..'F8' }
+      lkpdChecked: false,
+    };
+
+    /**
+     * ============================================================================
+     * 3. ENGINE EFEK SUARA PROSEDURAL (WEB AUDIO API MURNI - TANPA FILE EKSTERNAL)
+     * ============================================================================
+     */
+    let audioCtx = null;
+
+    function ensureAudioCtx() {
+      if (!audioCtx) {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (AudioContextClass) audioCtx = new AudioContextClass();
+      }
+      if (audioCtx && audioCtx.state === 'suspended') {
+        audioCtx.resume().catch(() => {});
+      }
+    }
+
+    function playTone(freq, duration, type = 'sine', gainVal = 0.08, delay = 0) {
+      if (!state.soundEnabled) return;
+      try {
+        ensureAudioCtx();
+        if (!audioCtx) return;
+        const now = audioCtx.currentTime + delay;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, now);
+        gain.gain.setValueAtTime(0.001, now);
+        gain.gain.exponentialRampToValueAtTime(gainVal, now + 0.01);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start(now);
+        osc.stop(now + duration + 0.02);
+      } catch (e) {
+        // Abaikan error audio agar aplikasi tetap berjalan lancar
+      }
+    }
+
+    function playSFX(type) {
+      if (!state.soundEnabled) return;
+      switch (type) {
+        case 'click':
+          playTone(740, 0.055, 'triangle', 0.06);
+          break;
+        case 'hover':
+          playTone(880, 0.03, 'sine', 0.03);
+          break;
+        case 'selectPart':
+          playTone(587.33, 0.08, 'sine', 0.07, 0);
+          playTone(880, 0.12, 'sine', 0.07, 0.05);
+          break;
+        case 'mode':
+          playTone(440, 0.09, 'triangle', 0.07, 0);
+          playTone(659.25, 0.12, 'triangle', 0.06, 0.06);
+          break;
+        case 'record':
+          playTone(523.25, 0.1, 'sine', 0.07, 0);
+          playTone(659.25, 0.1, 'sine', 0.07, 0.06);
+          playTone(783.99, 0.16, 'sine', 0.08, 0.12);
+          break;
+        case 'success':
+          playTone(523.25, 0.1, 'sine', 0.08, 0);
+          playTone(659.25, 0.1, 'sine', 0.08, 0.07);
+          playTone(783.99, 0.1, 'sine', 0.08, 0.14);
+          playTone(1046.5, 0.25, 'sine', 0.09, 0.21);
+          break;
+        case 'reset':
+          playTone(440, 0.09, 'triangle', 0.07, 0);
+          playTone(329.63, 0.14, 'triangle', 0.06, 0.07);
+          break;
+        case 'start':
+          playTone(440, 0.1, 'sine', 0.07, 0);
+          playTone(554.37, 0.1, 'sine', 0.07, 0.07);
+          playTone(659.25, 0.12, 'sine', 0.08, 0.14);
+          playTone(880, 0.28, 'sine', 0.09, 0.22);
+          break;
+      }
+    }
+
+    function toggleSound() {
+      state.soundEnabled = !state.soundEnabled;
+      const icon = state.soundEnabled ? '🔊' : '🔇';
+      const label = state.soundEnabled ? 'SFX ON' : 'SFX OFF';
+      document.getElementById('sound-icon').textContent = icon;
+      document.getElementById('sound-label').textContent = label;
+      const sIcon = document.getElementById('splash-sound-icon');
+      const sLabel = document.getElementById('splash-sound-label');
+      if (sIcon) sIcon.textContent = icon;
+      if (sLabel) sLabel.textContent = label;
+      if (state.soundEnabled) playSFX('click');
+    }
+
+    function toggleFullscreen() {
+      playSFX('click');
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen?.().catch(() => {});
+      } else {
+        document.exitFullscreen?.().catch(() => {});
+      }
+    }
+
+    /**
+     * ============================================================================
+     * 4. NOTIFIKASI TOAST (Pengganti alert/confirm)
+     * ============================================================================
+     */
+    let toastTimer = null;
+    function showToast(msg, icon = 'ℹ️') {
+      const box = document.getElementById('toast-box');
+      document.getElementById('toast-icon').textContent = icon;
+      document.getElementById('toast-msg').textContent = msg;
+      box.classList.remove('hidden');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => box.classList.add('hidden'), 2500);
+    }
+
+    /**
+     * ============================================================================
+     * 5. NAVIGASI TAB
+     * ============================================================================
+     */
+    function switchTab(tabId) {
+      playSFX('click');
+      state.activeTab = tabId;
+
+      document.querySelectorAll('.tab-panel').forEach((p) => p.classList.add('hidden'));
+      const activePanel = document.getElementById(`panel-${tabId}`);
+      if (activePanel) activePanel.classList.remove('hidden');
+
+      document.querySelectorAll('.tab-btn').forEach((btn) => {
+        btn.classList.remove('bg-emerald-500', 'text-slate-950', 'shadow-md');
+        btn.classList.add('text-slate-300', 'hover:text-white', 'hover:bg-slate-800');
+      });
+
+      const activeBtn = document.getElementById(`tab-btn-${tabId}`);
+      if (activeBtn) {
+        activeBtn.classList.remove('text-slate-300', 'hover:text-white', 'hover:bg-slate-800');
+        activeBtn.classList.add('bg-emerald-500', 'text-slate-950', 'shadow-md');
+      }
+
+      if (tabId === 'simulasi') {
+        setTimeout(resizeThreeViewport, 30);
+      } else if (tabId === 'lkpd') {
+        renderLKPDTable();
+      }
+    }
+
+    /**
+     * ============================================================================
+     * 6. ENGINE 3D THREE.JS (SCENE, LIGHTING, 3 MODEL VIRUS, RAYCASTER, ANIMASI)
+     * ============================================================================
+     */
+    let scene, camera, renderer, raycaster;
+    let virusRoot = null;
+    let bgParticles = null;
+    let animatedNodes = []; // { obj, basePos, explodePos, isShell, isFrontShell, partId, materials }
+    let clickableMeshes = [];
+
+    // Kontrol Kamera Rotasi & Zoom Tanpa OrbitControls Eksternal
+    const camCtrl = {
+      rotX: 0.22,
+      rotY: 0.45,
+      targetRotX: 0.22,
+      targetRotY: 0.45,
+      distance: 8.5,
+      targetDistance: 8.5,
+      isDragging: false,
+      pointerDownX: 0,
+      pointerDownY: 0,
+      lastX: 0,
+      lastY: 0,
+      dragMoved: false,
+    };
+
+    function initThreeEngine() {
+      const container = document.getElementById('three-container');
+      if (!container || typeof THREE === 'undefined') return;
+
+      scene = new THREE.Scene();
+      scene.fog = new THREE.FogExp2(0x020617, 0.032);
+
+      const width = container.clientWidth || 640;
+      const height = container.clientHeight || 420;
+      camera = new THREE.PerspectiveCamera(42, width / height, 0.1, 100);
+      camera.position.set(0, 0, camCtrl.distance);
+
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      renderer.setSize(width, height);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.15;
+      container.innerHTML = '';
+      container.appendChild(renderer.domElement);
+
+      raycaster = new THREE.Raycaster();
+
+      // Pencahayaan Studio Multi-Arah + Rim Light Bioluminesens
+      const ambient = new THREE.AmbientLight(0xcbd5e1, 0.65);
+      scene.add(ambient);
+
+      const keyLight = new THREE.DirectionalLight(0xffffff, 1.15);
+      keyLight.position.set(6, 9, 8);
+      scene.add(keyLight);
+
+      const rimEmerald = new THREE.PointLight(0x10b981, 1.8, 25);
+      rimEmerald.position.set(-7, 3, -5);
+      scene.add(rimEmerald);
+
+      const rimCyan = new THREE.PointLight(0x22d3ee, 1.5, 25);
+      rimCyan.position.set(7, -4, -4);
+      scene.add(rimCyan);
+
+      const rimViolet = new THREE.PointLight(0x8b5cf6, 1.2, 22);
+      rimViolet.position.set(0, -7, 5);
+      scene.add(rimViolet);
+
+      // Partikel Latar Mikroskopis Melayang
+      const pCount = 160;
+      const pGeo = new THREE.BufferGeometry();
+      const pPos = new Float32Array(pCount * 3);
+      for (let i = 0; i < pCount; i++) {
+        pPos[i * 3] = (Math.random() - 0.5) * 28;
+        pPos[i * 3 + 1] = (Math.random() - 0.5) * 20;
+        pPos[i * 3 + 2] = (Math.random() - 0.5) * 20 - 4;
+      }
+      pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3));
+      const pMat = new THREE.PointsMaterial({
+        color: 0x38bdf8,
+        size: 0.08,
+        transparent: true,
+        opacity: 0.45,
+      });
+      bgParticles = new THREE.Points(pGeo, pMat);
+      scene.add(bgParticles);
+
+      // Root Group untuk Model Virus Aktif
+      virusRoot = new THREE.Group();
+      scene.add(virusRoot);
+
+      // Event Mouse & Touch untuk Rotasi 360°, Zoom & Raycast Klik
+      const domEl = renderer.domElement;
+
+      domEl.addEventListener('pointerdown', (e) => {
+        camCtrl.isDragging = true;
+        camCtrl.dragMoved = false;
+        camCtrl.pointerDownX = e.clientX;
+        camCtrl.pointerDownY = e.clientY;
+        camCtrl.lastX = e.clientX;
+        camCtrl.lastY = e.clientY;
+      });
+
+      window.addEventListener('pointermove', (e) => {
+        if (!camCtrl.isDragging) return;
+        const dx = e.clientX - camCtrl.lastX;
+        const dy = e.clientY - camCtrl.lastY;
+        camCtrl.lastX = e.clientX;
+        camCtrl.lastY = e.clientY;
+
+        if (Math.hypot(e.clientX - camCtrl.pointerDownX, e.clientY - camCtrl.pointerDownY) > 5) {
+          camCtrl.dragMoved = true;
+        }
+
+        camCtrl.targetRotY += dx * 0.009;
+        camCtrl.targetRotX = Math.max(-1.4, Math.min(1.4, camCtrl.targetRotX + dy * 0.009));
+      });
+
+      window.addEventListener('pointerup', (e) => {
+        if (!camCtrl.isDragging) return;
+        camCtrl.isDragging = false;
+        if (!camCtrl.dragMoved && state.activeTab === 'simulasi') {
+          handleCanvasClick(e);
+        }
+      });
+
+      domEl.addEventListener(
+        'wheel',
+        (e) => {
+          e.preventDefault();
+          zoomCamera(e.deltaY > 0 ? 0.65 : -0.65);
+        },
+        { passive: false }
+      );
+    }
+
+    function resizeThreeViewport() {
+      const container = document.getElementById('three-container');
+      if (!container || !renderer || !camera) return;
+      const w = container.clientWidth;
+      const h = container.clientHeight;
+      if (w === 0 || h === 0) return;
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+      renderer.setSize(w, h);
+    }
+
+    function zoomCamera(delta) {
+      camCtrl.targetDistance = Math.max(4.5, Math.min(14.0, camCtrl.targetDistance + delta));
+    }
+
+    function resetCamera() {
+      playSFX('click');
+      camCtrl.targetRotX = 0.22;
+      camCtrl.targetRotY = 0.45;
+      camCtrl.targetDistance = 8.5;
+    }
+
+    function toggleAutoRotate() {
+      state.autoRotate = !state.autoRotate;
+      playSFX('click');
+      const btn = document.getElementById('btn-autorotate');
+      if (state.autoRotate) {
+        btn.textContent = '⟳ Auto: ON';
+        btn.className = 'px-2 py-1 rounded-lg bg-emerald-500/20 border border-emerald-400/50 text-emerald-300 text-[10px] font-bold backdrop-blur-md hover:bg-emerald-500/30 transition cursor-pointer';
+      } else {
+        btn.textContent = '⟳ Auto: OFF';
+        btn.className = 'px-2 py-1 rounded-lg bg-slate-900/85 border border-slate-700 text-slate-400 text-[10px] font-bold backdrop-blur-md hover:bg-slate-800 transition cursor-pointer';
+      }
+    }
+
+    /**
+     * Helper: Mendaftarkan Grup/Mesh ke Sistem Raycaster & Animasi Mode
+     */
+    function registerPartNode(obj, partId, basePos, explodePos, options = {}) {
+      const mats = [];
+      obj.traverse((child) => {
+        if (child.isMesh) {
+          child.userData.partId = partId;
+          clickableMeshes.push(child);
+          if (child.material) {
+            child.material.transparent = true;
+            mats.push(child.material);
+          }
+        }
+      });
+      animatedNodes.push({
+        obj,
+        partId,
+        basePos: basePos.clone(),
+        explodePos: explodePos.clone(),
+        isShell: !!options.isShell,
+        isFrontShell: !!options.isFrontShell,
+        baseOpacity: options.baseOpacity !== undefined ? options.baseOpacity : 1.0,
+        materials: mats,
+      });
+    }
+
+    function clearCurrentVirusModel() {
+      while (virusRoot.children.length > 0) {
+        const child = virusRoot.children[0];
+        virusRoot.remove(child);
+      }
+      animatedNodes = [];
+      clickableMeshes = [];
+    }
+
+    /**
+     * ============================================================================
+     * PEMBANGUN MODEL 3D PROSEDURAL:
+     * 1. BAKTERIOFAG T4  |  2. SARS-CoV-2  |  3. TOBACCO MOSAIC VIRUS (TMV)
+     * ============================================================================
+     */
+    function buildBacteriophageT4() {
+      clearCurrentVirusModel();
+
+      // 1. Kepala Kapsid Ikosahedral (Elongated)
+      const headGroup = new THREE.Group();
+      const headGeo = new THREE.IcosahedronGeometry(1.18, 0);
+      headGeo.scale(0.92, 1.24, 0.92);
+      const headMat = new THREE.MeshStandardMaterial({
+        color: 0x10b981,
+        roughness: 0.3,
+        metalness: 0.25,
+        flatShading: true,
+      });
+      const headMesh = new THREE.Mesh(headGeo, headMat);
+      headGroup.add(headMesh);
+
+      // Wireframe halus tepi ikosahedral
+      const wireMat = new THREE.MeshBasicMaterial({
+        color: 0x6ee7b7,
+        wireframe: true,
+        transparent: true,
+        opacity: 0.35,
+      });
+      headGroup.add(new THREE.Mesh(headGeo, wireMat));
+      headGroup.position.set(0, 1.85, 0);
+      virusRoot.add(headGroup);
+      registerPartNode(headGroup, 'kapsid', new THREE.Vector3(0, 1.85, 0), new THREE.Vector3(0, 2.95, 0), { isShell: true });
+
+      // 2. Materi Genetik DNA (Heliks Ganda di dalam Kepala)
+      const dnaGroup = new THREE.Group();
+      const strandMat1 = new THREE.MeshStandardMaterial({ color: 0xfacc15, emissive: 0x713f12, roughness: 0.25 });
+      const strandMat2 = new THREE.MeshStandardMaterial({ color: 0xf97316, emissive: 0x7c2d12, roughness: 0.25 });
+      const rungMat = new THREE.MeshStandardMaterial({ color: 0x38bdf8, roughness: 0.3 });
+
+      const pts1 = [];
+      const pts2 = [];
+      const steps = 28;
+      for (let i = 0; i <= steps; i++) {
+        const t = i / steps;
+        const angle = t * Math.PI * 5.2;
+        const y = (t - 0.5) * 1.65;
+        const rad = 0.36;
+        const p1 = new THREE.Vector3(Math.cos(angle) * rad, y, Math.sin(angle) * rad);
+        const p2 = new THREE.Vector3(Math.cos(angle + Math.PI) * rad, y, Math.sin(angle + Math.PI) * rad);
+        pts1.push(p1);
+        pts2.push(p2);
+
+        if (i % 3 === 0 && i > 0 && i < steps) {
+          const rungGeo = new THREE.CylinderGeometry(0.025, 0.025, rad * 2, 6);
+          const rung = new THREE.Mesh(rungGeo, rungMat);
+          rung.position.set(0, y, 0);
+          rung.rotation.z = Math.PI / 2;
+          rung.rotation.y = -angle;
+          dnaGroup.add(rung);
+        }
+      }
+      dnaGroup.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts1), 40, 0.055, 8, false), strandMat1));
+      dnaGroup.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts2), 40, 0.055, 8, false), strandMat2));
+      dnaGroup.position.set(0, 1.85, 0);
+      virusRoot.add(dnaGroup);
+      registerPartNode(dnaGroup, 'dna_rna', new THREE.Vector3(0, 1.85, 0), new THREE.Vector3(1.9, 2.2, 0.4));
+
+      // 3. Leher (Collar)
+      const collarGroup = new THREE.Group();
+      const collarMat = new THREE.MeshStandardMaterial({ color: 0x22d3ee, roughness: 0.3, metalness: 0.4 });
+      const collarRing = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 0.22, 16), collarMat);
+      collarGroup.add(collarRing);
+      collarGroup.position.set(0, 0.42, 0);
+      virusRoot.add(collarGroup);
+      registerPartNode(collarGroup, 'leher', new THREE.Vector3(0, 0.42, 0), new THREE.Vector3(0, 0.9, 0));
+
+      // 4. Selubung Ekor Bersegmen (Sheath)
+      const sheathGroup = new THREE.Group();
+      const sheathMat = new THREE.MeshStandardMaterial({ color: 0x0891b2, roughness: 0.35, metalness: 0.35 });
+      const coreTube = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 1.85, 16), new THREE.MeshStandardMaterial({ color: 0x67e8f9, roughness: 0.3 }));
+      sheathGroup.add(coreTube);
+      for (let i = 0; i < 9; i++) {
+        const ring = new THREE.Mesh(new THREE.TorusGeometry(0.32, 0.085, 10, 20), sheathMat);
+        ring.rotation.x = Math.PI / 2;
+        ring.position.y = 0.78 - i * 0.195;
+        sheathGroup.add(ring);
+      }
+      sheathGroup.position.set(0, -0.62, 0);
+      virusRoot.add(sheathGroup);
+      registerPartNode(sheathGroup, 'selubung_ekor', new THREE.Vector3(0, -0.62, 0), new THREE.Vector3(0, -0.65, 0));
+
+      // 5. Papan Dasar Heksagonal (Baseplate) + Jarum Penusuk
+      const baseGroup = new THREE.Group();
+      const baseMat = new THREE.MeshStandardMaterial({ color: 0xa78bfa, roughness: 0.3, metalness: 0.35, flatShading: true });
+      const plate = new THREE.Mesh(new THREE.CylinderGeometry(0.66, 0.54, 0.26, 6), baseMat);
+      baseGroup.add(plate);
+
+      // 6 Pin / Jarum Penusuk di Bawah Papan Dasar
+      const spikeMat = new THREE.MeshStandardMaterial({ color: 0xe879f9, roughness: 0.25, metalness: 0.4 });
+      for (let i = 0; i < 6; i++) {
+        const ang = (i / 6) * Math.PI * 2;
+        const pin = new THREE.Mesh(new THREE.ConeGeometry(0.075, 0.34, 8), spikeMat);
+        pin.rotation.x = Math.PI;
+        pin.position.set(Math.cos(ang) * 0.42, -0.26, Math.sin(ang) * 0.42);
+        baseGroup.add(pin);
+      }
+      // Jarum utama tengah
+      const centerPin = new THREE.Mesh(new THREE.ConeGeometry(0.11, 0.46, 10), spikeMat);
+      centerPin.rotation.x = Math.PI;
+      centerPin.position.set(0, -0.32, 0);
+      baseGroup.add(centerPin);
+
+      baseGroup.position.set(0, -1.66, 0);
+      virusRoot.add(baseGroup);
+      registerPartNode(baseGroup, 'papan_dasar', new THREE.Vector3(0, -1.66, 0), new THREE.Vector3(0, -2.35, 0));
+
+      // 6. 6 Serabut Ekor Bersendi (Tail Fibers)
+      const fiberMat = new THREE.MeshStandardMaterial({ color: 0x38bdf8, roughness: 0.3, metalness: 0.45 });
+      const jointMat = new THREE.MeshStandardMaterial({ color: 0x7dd3fc, roughness: 0.25 });
+
+      for (let i = 0; i < 6; i++) {
+        const ang = (i / 6) * Math.PI * 2;
+        const legGroup = new THREE.Group();
+
+        // Titik pangkal di tepi baseplate, lutut ke atas-luar, ujung kaki ke bawah-luar
+        const p0 = new THREE.Vector3(Math.cos(ang) * 0.56, 0, Math.sin(ang) * 0.56);
+        const p1 = new THREE.Vector3(Math.cos(ang) * 1.48, 0.55, Math.sin(ang) * 1.48);
+        const p2 = new THREE.Vector3(Math.cos(ang) * 2.08, -1.25, Math.sin(ang) * 2.08);
+
+        const seg1 = createCylinderBetween(p0, p1, 0.055, fiberMat);
+        const seg2 = createCylinderBetween(p1, p2, 0.048, fiberMat);
+        const knee = new THREE.Mesh(new THREE.SphereGeometry(0.085, 10, 10), jointMat);
+        knee.position.copy(p1);
+        const foot = new THREE.Mesh(new THREE.SphereGeometry(0.07, 10, 10), jointMat);
+        foot.position.copy(p2);
+
+        legGroup.add(seg1, seg2, knee, foot);
+        legGroup.position.set(0, -1.66, 0);
+        virusRoot.add(legGroup);
+
+        const explodeDir = new THREE.Vector3(Math.cos(ang) * 0.95, -2.55, Math.sin(ang) * 0.95);
+        registerPartNode(legGroup, 'serabut_ekor', new THREE.Vector3(0, -1.66, 0), explodeDir);
+      }
+    }
+
+    function buildSarsCov2() {
+      clearCurrentVirusModel();
+
+      // 1. Amplop Lipid (Bola Sferis)
+      const envGroup = new THREE.Group();
+      const envGeo = new THREE.SphereGeometry(1.72, 36, 36);
+      const envMat = new THREE.MeshStandardMaterial({
+        color: 0x7c3aed,
+        roughness: 0.42,
+        metalness: 0.18,
+      });
+      const envMesh = new THREE.Mesh(envGeo, envMat);
+      envGroup.add(envMesh);
+      virusRoot.add(envGroup);
+      registerPartNode(envGroup, 'amplop_lipid', new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, 0), { isShell: true });
+
+      // 2. Untai RNA + Nukleokapsid Spiral di Dalam Inti
+      const rnaGroup = new THREE.Group();
+      const rnaPts = [];
+      const totalPts = 95;
+      for (let i = 0; i < totalPts; i++) {
+        const t = i / (totalPts - 1);
+        const theta = t * Math.PI * 10;
+        const phi = Math.acos(1 - 2 * t);
+        const rad = 0.85 * Math.sin(phi) + 0.25;
+        rnaPts.push(new THREE.Vector3(
+          Math.cos(theta) * rad,
+          (t - 0.5) * 2.0,
+          Math.sin(theta) * rad
+        ));
+      }
+      const rnaCurve = new THREE.CatmullRomCurve3(rnaPts);
+      const rnaMat = new THREE.MeshStandardMaterial({ color: 0x34d399, emissive: 0x065f46, roughness: 0.25 });
+      rnaGroup.add(new THREE.Mesh(new THREE.TubeGeometry(rnaCurve, 120, 0.07, 8, false), rnaMat));
+
+      // Protein Nukleokapsid (N) menempel sepanjang RNA
+      const nucMat = new THREE.MeshStandardMaterial({ color: 0xfacc15, roughness: 0.3 });
+      for (let i = 0; i < totalPts; i += 4) {
+        const bead = new THREE.Mesh(new THREE.SphereGeometry(0.11, 10, 10), nucMat);
+        bead.position.copy(rnaPts[i]);
+        rnaGroup.add(bead);
+      }
+      virusRoot.add(rnaGroup);
+      registerPartNode(rnaGroup, 'dna_rna', new THREE.Vector3(0, 0, 0), new THREE.Vector3(2.8, 0.3, 0));
+
+      // 3. Glikoprotein Spike (S) Terdistribusi Merata (Fibonacci Sphere)
+      const spikeCount = 34;
+      const goldenAngle = Math.PI * (3 - Math.sqrt(5));
+      const spikeStemMat = new THREE.MeshStandardMaterial({ color: 0xe11d48, roughness: 0.3, metalness: 0.2 });
+      const spikeCrownMat = new THREE.MeshStandardMaterial({ color: 0xfb7185, roughness: 0.28, metalness: 0.2 });
+
+      for (let i = 0; i < spikeCount; i++) {
+        const y = 1 - (i / (spikeCount - 1)) * 2;
+        const radiusAtY = Math.sqrt(1 - y * y);
+        const theta = goldenAngle * i;
+        const dir = new THREE.Vector3(Math.cos(theta) * radiusAtY, y, Math.sin(theta) * radiusAtY).normalize();
+
+        const spikeObj = new THREE.Group();
+        const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.065, 0.045, 0.48, 8), spikeStemMat);
+        stem.position.y = 0.24;
+        spikeObj.add(stem);
+
+        // Kepala trimer (3 lobus) seperti mahkota
+        for (let k = 0; k < 3; k++) {
+          const ka = (k / 3) * Math.PI * 2;
+          const lobe = new THREE.Mesh(new THREE.SphereGeometry(0.11, 10, 10), spikeCrownMat);
+          lobe.position.set(Math.cos(ka) * 0.085, 0.52, Math.sin(ka) * 0.085);
+          spikeObj.add(lobe);
+        }
+
+        const basePos = dir.clone().multiplyScalar(1.68);
+        const explodePos = dir.clone().multiplyScalar(2.65);
+        spikeObj.position.copy(basePos);
+        spikeObj.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+
+        virusRoot.add(spikeObj);
+        registerPartNode(spikeObj, 'spike', basePos, explodePos);
+      }
+
+      // 4. Protein Membran (M) di Permukaan Amplop
+      const mCount = 26;
+      const mMat = new THREE.MeshStandardMaterial({ color: 0x38bdf8, roughness: 0.3, metalness: 0.35 });
+      for (let i = 0; i < mCount; i++) {
+        const y = 1 - ((i + 0.5) / mCount) * 2;
+        const r = Math.sqrt(1 - y * y);
+        const theta = goldenAngle * (i + 15);
+        const dir = new THREE.Vector3(Math.cos(theta) * r, y, Math.sin(theta) * r).normalize();
+
+        const mObj = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.085, 0.16, 10), mMat);
+        const basePos = dir.clone().multiplyScalar(1.73);
+        const explodePos = dir.clone().multiplyScalar(2.22);
+        mObj.position.copy(basePos);
+        mObj.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+
+        virusRoot.add(mObj);
+        registerPartNode(mObj, 'protein_m', basePos, explodePos);
+      }
+    }
+
+    function buildTMV() {
+      clearCurrentVirusModel();
+
+      // 1. Untai RNA Spiral di Rongga Tengah
+      const rnaGroup = new THREE.Group();
+      const rnaPts = [];
+      const turns = 7.5;
+      const samples = 110;
+      for (let i = 0; i < samples; i++) {
+        const t = i / (samples - 1);
+        const ang = t * Math.PI * 2 * turns;
+        const y = (t - 0.5) * 4.5;
+        rnaPts.push(new THREE.Vector3(Math.cos(ang) * 0.44, y, Math.sin(ang) * 0.44));
+      }
+      const rnaMat = new THREE.MeshStandardMaterial({ color: 0xfacc15, emissive: 0x713f12, roughness: 0.25 });
+      rnaGroup.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(rnaPts), 140, 0.085, 8, false), rnaMat));
+      virusRoot.add(rnaGroup);
+      registerPartNode(rnaGroup, 'dna_rna', new THREE.Vector3(0, 0, 0), new THREE.Vector3(2.3, 0, 0));
+
+      // 2. Susunan Kapsomer Protein Heliks Silindris
+      const totalCapsomers = 96;
+      const perTurn = 12;
+      const capGeo = new THREE.BoxGeometry(0.58, 0.34, 0.36);
+
+      for (let i = 0; i < totalCapsomers; i++) {
+        const t = i / (totalCapsomers - 1);
+        const ang = (i / perTurn) * Math.PI * 2;
+        const y = (t - 0.5) * 4.55;
+        const rad = 0.88;
+
+        const isFront = Math.sin(ang) > 0.15; // Sisi depan untuk mode irisan transparan
+        const capMat = new THREE.MeshStandardMaterial({
+          color: i % 2 === 0 ? 0x06b6d4 : 0x0ea5e9,
+          roughness: 0.32,
+          metalness: 0.25,
+        });
+
+        const mesh = new THREE.Mesh(capGeo, capMat);
+        const basePos = new THREE.Vector3(Math.cos(ang) * rad, y, Math.sin(ang) * rad);
+        const explodePos = new THREE.Vector3(Math.cos(ang) * (rad + 0.95), y * 1.18, Math.sin(ang) * (rad + 0.95));
+
+        mesh.position.copy(basePos);
+        mesh.rotation.y = -ang;
+        virusRoot.add(mesh);
+
+        registerPartNode(mesh, 'kapsomer', basePos, explodePos, { isFrontShell: isFront });
+      }
+    }
+
+    function createCylinderBetween(p1, p2, radius, material) {
+      const dir = new THREE.Vector3().subVectors(p2, p1);
+      const len = dir.length();
+      const geo = new THREE.CylinderGeometry(radius, radius, len, 8);
+      const mesh = new THREE.Mesh(geo, material);
+      mesh.position.copy(p1).add(p2).multiplyScalar(0.5);
+      mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize());
+      return mesh;
+    }
+
+    /**
+     * ============================================================================
+     * 7. INTERAKSI 3D: RAYCASTER KLIK, PILIH VIRUS, MODE TAMPILAN & HIGHLIGHT
+     * ============================================================================
+     */
+    function handleCanvasClick(event) {
+      if (!renderer || !camera || clickableMeshes.length === 0) return;
+      const rect = renderer.domElement.getBoundingClientRect();
+      const mouse = new THREE.Vector2(
+        ((event.clientX - rect.left) / rect.width) * 2 - 1,
+        -((event.clientY - rect.top) / rect.height) * 2 + 1
+      );
+
+      raycaster.setFromCamera(mouse, camera);
+      const intersects = raycaster.intersectObjects(clickableMeshes, false);
+      if (intersects.length > 0) {
+        // Jika mode cutaway, prioritaskan objek bagian dalam jika klik menembus shell transparan
+        let hit = intersects[0];
+        if (state.viewMode === 'cutaway') {
+          const innerHit = intersects.find((item) => {
+            const pid = item.object.userData.partId;
+            return pid === 'dna_rna';
+          });
+          if (innerHit) hit = innerHit;
+        }
+        const partId = hit.object.userData.partId;
+        if (partId) selectPart(partId);
+      }
+    }
+
+    function selectVirus(virusId) {
+      if (!VIRUS_DB[virusId]) return;
+      playSFX('mode');
+      state.activeVirus = virusId;
+      state.selectedPartId = null;
+
+      // Perbarui gaya tombol virus
+      ['t4', 'sars', 'tmv'].forEach((id) => {
+        const btn = document.getElementById(`vbtn-${id}`);
+        if (!btn) return;
+        if (id === virusId) {
+          btn.className = 'p-2 rounded-xl border text-center transition-all cursor-pointer bg-emerald-500/20 border-emerald-400 text-white shadow-sm';
+        } else {
+          btn.className = 'p-2 rounded-xl border text-center transition-all cursor-pointer bg-slate-900/70 hover:bg-slate-800 border-slate-700 text-slate-300';
+        }
+      });
+
+      if (virusId === 't4') buildBacteriophageT4();
+      else if (virusId === 'sars') buildSarsCov2();
+      else buildTMV();
+
+      const v = VIRUS_DB[virusId];
+      document.getElementById('sim-virus-title').textContent = v.name;
+      document.getElementById('sim-virus-shape').textContent = v.shape;
+      document.getElementById('sim-virus-acid').textContent = v.acid;
+
+      renderPartsList();
+      updatePartDetailOverlay();
+      showToast(`Model 3D beralih ke ${v.name}.`, '🧬');
+    }
+
+    function setViewMode(mode) {
+      playSFX('mode');
+      state.viewMode = mode;
+
+      ['normal', 'cutaway', 'exploded'].forEach((m) => {
+        const btn = document.getElementById(`mbtn-${m}`);
+        if (!btn) return;
+        if (m === mode) {
+          btn.className = 'py-1.5 px-2 rounded-xl border text-[11px] font-bold transition cursor-pointer bg-cyan-500/20 border-cyan-400 text-white shadow-sm';
+        } else {
+          btn.className = 'py-1.5 px-2 rounded-xl border text-[11px] font-bold transition cursor-pointer bg-slate-900/70 hover:bg-slate-800 border-slate-700 text-slate-300';
+        }
+      });
+
+      if (mode === 'cutaway') {
+        showToast('Mode Irisan (Cutaway): Lapisan luar transparan agar DNA/RNA terlihat!', '🔍');
+      } else if (mode === 'exploded') {
+        showToast('Mode Ledakan (Exploded View): Komponen virus dipisahkan.', '💥');
+      } else {
+        showToast('Mode Utuh (Normal) diaktifkan.', '🧊');
+      }
+    }
+
+    function selectPart(partId) {
+      playSFX('selectPart');
+      state.selectedPartId = partId;
+      renderPartsList();
+      updatePartDetailOverlay();
+    }
+
+    function renderPartsList() {
+      const container = document.getElementById('parts-list');
+      const v = VIRUS_DB[state.activeVirus];
+      container.innerHTML = '';
+
+      v.parts.forEach((p) => {
+        const isSelected = state.selectedPartId === p.id;
+        const isRecorded = p.lkpdId && state.lkpdObserved[p.lkpdId];
+
+        const btn = document.createElement('button');
+        btn.onclick = () => selectPart(p.id);
+        btn.className = `px-2.5 py-2 rounded-xl border text-left transition-all cursor-pointer flex items-center justify-between gap-1 ${
+          isSelected
+            ? 'bg-violet-500/25 border-violet-400 text-white shadow-sm shadow-violet-500/20'
+            : 'bg-slate-900/75 hover:bg-slate-800 border-slate-700/70 text-slate-300'
+        }`;
+
+        btn.innerHTML = `
+          <div class="flex items-center gap-1.5 min-w-0">
+            <span class="w-2.5 h-2.5 rounded-full shrink-0" style="background-color:${p.color}"></span>
+            <span class="text-[11px] font-bold truncate">${p.name}</span>
+          </div>
+          ${isRecorded ? '<span class="text-emerald-400 text-[10px] font-extrabold shrink-0" title="Tercatat di LKPD">✓</span>' : ''}
+        `;
+        container.appendChild(btn);
+      });
+    }
+
+    function updatePartDetailOverlay() {
+      const nameEl = document.getElementById('detail-part-name');
+      const chemEl = document.getElementById('detail-part-chem');
+      const funcEl = document.getElementById('detail-part-func');
+      const tagEl = document.getElementById('detail-lkpd-tag');
+
+      const v = VIRUS_DB[state.activeVirus];
+      const part = v.parts.find((p) => p.id === state.selectedPartId);
+
+      if (!part) {
+        nameEl.textContent = 'Klik bagian virus pada 3D atau panel kanan';
+        chemEl.textContent = '—';
+        funcEl.textContent = 'Gunakan mode Irisan (Cutaway) untuk melihat DNA/RNA di dalam kapsid/amplop, atau Mode Ledakan (Exploded View) untuk memisahkan komponen.';
+        tagEl.classList.add('hidden');
+        return;
+      }
+
+      nameEl.textContent = part.name;
+      chemEl.textContent = part.chem;
+      funcEl.textContent = part.func;
+      if (part.lkpdId && state.lkpdObserved[part.lkpdId]) {
+        tagEl.classList.remove('hidden');
+      } else {
+        tagEl.classList.add('hidden');
+      }
+    }
+
+    function resetSimulation() {
+      playSFX('reset');
+      state.viewMode = 'normal';
+      state.selectedPartId = null;
+      state.autoRotate = true;
+      setViewMode('normal');
+      resetCamera();
+      const btnAuto = document.getElementById('btn-autorotate');
+      if (btnAuto) {
+        btnAuto.textContent = '⟳ Auto: ON';
+        btnAuto.className = 'px-2 py-1 rounded-lg bg-emerald-500/20 border border-emerald-400/50 text-emerald-300 text-[10px] font-bold backdrop-blur-md hover:bg-emerald-500/30 transition cursor-pointer';
+      }
+      renderPartsList();
+      updatePartDetailOverlay();
+      showToast('Tampilan simulasi 3D direset ke posisi awal.', '🔄');
+    }
+
+    /**
+     * Loop Animasi 60 FPS Three.js (Rotasi, Transisi Exploded, Cutaway & Emissive Highlight)
+     */
+    let animClock = 0;
+    function animate() {
+      requestAnimationFrame(animate);
+      animClock += 0.016;
+
+      if (!renderer || !scene || !camera) return;
+
+      // Auto-rotate lembut saat tidak di-drag
+      if (state.autoRotate && !camCtrl.isDragging) {
+        camCtrl.targetRotY += 0.0045;
+      }
+
+      // Smooth damping rotasi & zoom
+      camCtrl.rotX += (camCtrl.targetRotX - camCtrl.rotX) * 0.12;
+      camCtrl.rotY += (camCtrl.targetRotY - camCtrl.rotY) * 0.12;
+      camCtrl.distance += (camCtrl.targetDistance - camCtrl.distance) * 0.12;
+
+      camera.position.z = camCtrl.distance;
+      if (virusRoot) {
+        virusRoot.rotation.x = camCtrl.rotX;
+        virusRoot.rotation.y = camCtrl.rotY;
+      }
+
+      if (bgParticles) {
+        bgParticles.rotation.y += 0.0007;
+        bgParticles.rotation.x += 0.0003;
+      }
+
+      // Perbarui posisi Exploded View, transparansi Cutaway, dan Emissive Highlight
+      const isExploded = state.viewMode === 'exploded';
+      const isCutaway = state.viewMode === 'cutaway';
+      const pulse = 0.55 + 0.45 * Math.sin(animClock * 5);
+
+      animatedNodes.forEach((node) => {
+        // Interpolasi posisi
+        const targetPos = isExploded ? node.explodePos : node.basePos;
+        node.obj.position.lerp(targetPos, 0.1);
+
+        // Interpolasi transparansi untuk Cutaway
+        let targetOpacity = node.baseOpacity;
+        if (isCutaway && (node.isShell || node.isFrontShell)) {
+          targetOpacity = 0.2;
+        }
+
+        const isSelected = state.selectedPartId === node.partId;
+        node.materials.forEach((mat) => {
+          if (mat.opacity !== undefined) {
+            mat.opacity += (targetOpacity - mat.opacity) * 0.12;
+            mat.depthWrite = mat.opacity > 0.65;
+          }
+          if (mat.emissive) {
+            if (isSelected) {
+              mat.emissive.setHex(0x22d3ee);
+              mat.emissiveIntensity = 0.45 + pulse * 0.45;
+            } else if (node.partId === 'dna_rna') {
+              mat.emissive.setHex(0x3f2e08);
+              mat.emissiveIntensity = 0.45;
+            } else {
+              mat.emissive.setHex(0x000000);
+              mat.emissiveIntensity = 0;
+            }
+          }
+        });
+      });
+
+      renderer.render(scene, camera);
+    }
+
+    /**
+     * ============================================================================
+     * 8. LKPD INTERAKTIF (CATAT, PERIKSA, CETAK A4 & SALIN)
+     * ============================================================================
+     */
+    function recordSelectedPartToLKPD() {
+      if (!state.selectedPartId) {
+        showToast('Klik salah satu bagian anatomi virus terlebih dahulu untuk diinspeksi!', '⚠️');
+        playSFX('click');
+        return;
+      }
+
+      const v = VIRUS_DB[state.activeVirus];
+      const part = v.parts.find((p) => p.id === state.selectedPartId);
+      if (!part) return;
+
+      if (!part.lkpdId) {
+        showToast(`${part.name} adalah struktur pendukung. Inspeksi 8 struktur utama untuk LKPD!`, 'ℹ️');
+        playSFX('click');
+        return;
+      }
+
+      state.lkpdObserved[part.lkpdId] = true;
+      playSFX('record');
+      updateLKPDBadge();
+      renderPartsList();
+      updatePartDetailOverlay();
+      showToast(`"${part.name}" berhasil dicatat sebagai Teramati di LKPD!`, '📝');
+    }
+
+    function updateLKPDBadge() {
+      const count = Object.keys(state.lkpdObserved).length;
+      const badge = document.getElementById('lkpd-badge');
+      if (count > 0) {
+        badge.textContent = count;
+        badge.classList.remove('hidden');
+      } else {
+        badge.classList.add('hidden');
+      }
+    }
+
+    function updateLKPDAnswer(itemId, code) {
+      playSFX('click');
+      state.lkpdAnswers[itemId] = code;
+      state.lkpdChecked = false;
+      document.getElementById('lkpd-score-box').classList.add('hidden');
+    }
+
+    function renderLKPDTable() {
+      const tbody = document.getElementById('lkpd-table-body');
+      tbody.innerHTML = '';
+
+      LKPD_ITEMS.forEach((item, idx) => {
+        const observed = !!state.lkpdObserved[item.id];
+        const userCode = state.lkpdAnswers[item.id] || '';
+
+        let statusHtml = '<span class="text-slate-500">—</span>';
+        if (state.lkpdChecked) {
+          if (!userCode) {
+            statusHtml = '<span class="text-amber-400 font-bold">Kosong</span>';
+          } else if (userCode === item.correctCode) {
+            statusHtml = '<span class="text-emerald-400 font-extrabold">✓ Benar</span>';
+          } else {
+            statusHtml = '<span class="text-rose-400 font-extrabold">✗ Salah</span>';
+          }
+        }
+
+        let optionsHtml = `<option value="" ${userCode === '' ? 'selected' : ''}>-- Pilih Fungsi Biologis --</option>`;
+        LKPD_FUNCTIONS.forEach((fn) => {
+          optionsHtml += `<option value="${fn.code}" ${userCode === fn.code ? 'selected' : ''}>${fn.text}</option>`;
+        });
+
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-slate-800/40 transition';
+        tr.innerHTML = `
+          <td class="py-1 px-2 text-center font-mono text-slate-400">${idx + 1}</td>
+          <td class="py-1 px-2">
+            <span class="font-bold text-white">${item.name}</span>
+            <span class="ml-1 text-[9px] font-mono px-1.5 py-0.5 rounded bg-slate-900 border border-slate-700 text-cyan-300">${item.virusTag}</span>
+          </td>
+          <td class="py-1 px-1.5 text-center font-bold ${observed ? 'text-emerald-400' : 'text-slate-500'}">
+            ${observed ? '✓ Teramati' : 'Belum'}
+          </td>
+          <td class="py-1 px-2">
+            <select onchange="updateLKPDAnswer('${item.id}', this.value)"
+              class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-[10px] lg:text-[11px] text-white focus:outline-none focus:border-emerald-500 cursor-pointer">
+              ${optionsHtml}
+            </select>
+          </td>
+          <td class="py-1 px-1.5 text-center text-[10px] lg:text-[11px]">${statusHtml}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function checkLKPDAnswers() {
+      let correct = 0;
+      let answered = 0;
+      LKPD_ITEMS.forEach((item) => {
+        const ans = state.lkpdAnswers[item.id];
+        if (ans) {
+          answered++;
+          if (ans === item.correctCode) correct++;
+        }
+      });
+
+      if (answered === 0) {
+        showToast('Pilih fungsi biologis pada kolom LKPD terlebih dahulu!', '⚠️');
+        playSFX('click');
+        return;
+      }
+
+      state.lkpdChecked = true;
+      renderLKPDTable();
+
+      const scoreBox = document.getElementById('lkpd-score-box');
+      scoreBox.textContent = `Skor: ${correct}/${LKPD_ITEMS.length}`;
+      scoreBox.classList.remove('hidden');
+
+      playSFX(correct === LKPD_ITEMS.length ? 'success' : 'record');
+      showToast(`Pemeriksaan selesai! Jawaban benar: ${correct} dari ${LKPD_ITEMS.length}.`, '✅');
+    }
+
+    function resetLKPD() {
+      playSFX('reset');
+      state.lkpdObserved = {};
+      state.lkpdAnswers = {};
+      state.lkpdChecked = false;
+      document.getElementById('lkpd-name').value = '';
+      document.getElementById('lkpd-class').value = '';
+      document.getElementById('lkpd-hots-1').value = '';
+      document.getElementById('lkpd-hots-2').value = '';
+      document.getElementById('lkpd-conclusion').value = '';
+      document.getElementById('lkpd-score-box').classList.add('hidden');
+      updateLKPDBadge();
+      renderPartsList();
+      updatePartDetailOverlay();
+      renderLKPDTable();
+      showToast('Seluruh data LKPD telah dibersihkan.', '🔄');
+    }
+
+    function escapeHtml(str) {
+      return String(str || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    function getFunctionTextByCode(code) {
+      const found = LKPD_FUNCTIONS.find((f) => f.code === code);
+      return found ? found.text : 'Belum dipilih';
+    }
+
+    function printLKPD() {
+      playSFX('click');
+      const name = document.getElementById('lkpd-name').value.trim() || '............................................';
+      const cls = document.getElementById('lkpd-class').value.trim() || 'X / ........';
+      const hots1 = document.getElementById('lkpd-hots-1').value.trim() || '(Belum dijawab)';
+      const hots2 = document.getElementById('lkpd-hots-2').value.trim() || '(Belum dijawab)';
+      const conc = document.getElementById('lkpd-conclusion').value.trim() || '(Belum diisi)';
+      const today = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+
+      let rowsHtml = '';
+      let correctCount = 0;
+      LKPD_ITEMS.forEach((item, i) => {
+        const obs = state.lkpdObserved[item.id] ? 'Teramati (3D)' : 'Belum dicatat';
+        const ansCode = state.lkpdAnswers[item.id] || '';
+        const ansText = getFunctionTextByCode(ansCode);
+        if (ansCode === item.correctCode) correctCount++;
+
+        rowsHtml += `
+          <tr>
+            <td style="border:1px solid #334155; padding:6px; text-align:center;">${i + 1}</td>
+            <td style="border:1px solid #334155; padding:6px;"><strong>${escapeHtml(item.name)}</strong> (${escapeHtml(item.virusTag)})</td>
+            <td style="border:1px solid #334155; padding:6px; text-align:center;">${escapeHtml(obs)}</td>
+            <td style="border:1px solid #334155; padding:6px;">${escapeHtml(ansText)}</td>
+          </tr>
+        `;
+      });
+
+      const scoreText = state.lkpdChecked ? `${correctCount} / ${LKPD_ITEMS.length}` : 'Belum diperiksa';
+      const printSheet = document.getElementById('print-lkpd-sheet');
+      printSheet.innerHTML = `
+        <div style="border-bottom:3px double #0f172a; padding-bottom:10px; margin-bottom:14px; text-align:center;">
+          <div style="font-size:16px; font-weight:800; letter-spacing:0.5px;">LEMBAR KERJA PESERTA DIDIK (LKPD) — LAB MAYA BIOLOGI</div>
+          <div style="font-size:13px; font-weight:700; margin-top:2px;">Eksplorasi Anatomi Virus 3D (Fase E / Kelas X)</div>
+          <div style="font-size:11px; color:#334155; margin-top:2px;">Tim MGMP Biologi — SMAN 1 Boja</div>
+        </div>
+
+        <table style="width:100%; font-size:12px; margin-bottom:14px; border-collapse:collapse;">
+          <tr>
+            <td style="width:55%; padding:2px 0;"><strong>Nama / Kelompok:</strong> ${escapeHtml(name)}</td>
+            <td style="width:45%; padding:2px 0;"><strong>Tanggal:</strong> ${escapeHtml(today)}</td>
+          </tr>
+          <tr>
+            <td style="padding:2px 0;"><strong>Kelas:</strong> ${escapeHtml(cls)}</td>
+            <td style="padding:2px 0;"><strong>Skor Identifikasi:</strong> ${escapeHtml(scoreText)}</td>
+          </tr>
+        </table>
+
+        <div style="font-size:12px; font-weight:800; margin-bottom:6px;">A. Tabel Identifikasi Struktur &amp; Fungsi Anatomi Virus 3D</div>
+        <table style="width:100%; border-collapse:collapse; font-size:11px; margin-bottom:16px;">
+          <thead>
+            <tr style="background:#e2e8f0;">
+              <th style="border:1px solid #334155; padding:6px; width:30px;">No</th>
+              <th style="border:1px solid #334155; padding:6px; text-align:left;">Struktur Anatomi</th>
+              <th style="border:1px solid #334155; padding:6px; width:100px;">Status Observasi</th>
+              <th style="border:1px solid #334155; padding:6px; text-align:left;">Fungsi Biologis</th>
+            </tr>
+          </thead>
+          <tbody>${rowsHtml}</tbody>
+        </table>
+
+        <div style="font-size:12px; font-weight:800; margin-bottom:6px;">B. Pertanyaan Analisis HOTS</div>
+        <div style="font-size:11px; margin-bottom:10px;">
+          <div style="font-weight:700; margin-bottom:3px;">1. Mengapa Bakteriofag T4 tidak dapat menginfeksi sel manusia, dan mengapa mutasi pada Glikoprotein Spike SARS-CoV-2 memengaruhi tingkat penularannya?</div>
+          <div style="border:1px solid #64748b; border-radius:6px; padding:8px; min-height:42px; white-space:pre-wrap;">${escapeHtml(hots1)}</div>
+        </div>
+        <div style="font-size:11px; margin-bottom:14px;">
+          <div style="font-weight:700; margin-bottom:3px;">2. Mengapa mencuci tangan dengan sabun selama 20 detik sangat efektif melumpuhkan SARS-CoV-2 dibandingkan virus tanpa amplop?</div>
+          <div style="border:1px solid #64748b; border-radius:6px; padding:8px; min-height:42px; white-space:pre-wrap;">${escapeHtml(hots2)}</div>
+        </div>
+
+        <div style="font-size:12px; font-weight:800; margin-bottom:6px;">C. Kesimpulan</div>
+        <div style="border:1px solid #64748b; border-radius:6px; padding:8px; min-height:48px; font-size:11px; white-space:pre-wrap; margin-bottom:20px;">${escapeHtml(conc)}</div>
+
+        <table style="width:100%; font-size:11px; margin-top:12px;">
+          <tr>
+            <td style="width:65%;"></td>
+            <td style="width:35%; text-align:center;">
+              <div>Mengetahui, Guru Mata Pelajaran</div>
+              <div style="height:48px;"></div>
+              <div style="border-top:1px solid #334155; padding-top:3px;">Nilai / Paraf Guru</div>
+            </td>
+          </tr>
+        </table>
+      `;
+
+      showToast('Membuka dialog cetak / simpan PDF LKPD...', '🖨️');
+      setTimeout(() => window.print(), 150);
+    }
+
+    function copyLKPDSummary() {
+      playSFX('click');
+      const name = document.getElementById('lkpd-name').value.trim() || '-';
+      const cls = document.getElementById('lkpd-class').value.trim() || '-';
+      const hots1 = document.getElementById('lkpd-hots-1').value.trim() || '(Belum dijawab)';
+      const hots2 = document.getElementById('lkpd-hots-2').value.trim() || '(Belum dijawab)';
+      const conc = document.getElementById('lkpd-conclusion').value.trim() || '(Belum diisi)';
+
+      let text = '=== HASIL LKPD LAB MAYA BIOLOGI: ANATOMI VIRUS 3D (KELAS X) ===\n';
+      text += `Nama: ${name} | Kelas: ${cls}\n\n`;
+      text += 'A. IDENTIFIKASI STRUKTUR:\n';
+      LKPD_ITEMS.forEach((item, i) => {
+        const obs = state.lkpdObserved[item.id] ? 'Teramati' : 'Belum';
+        const fnText = getFunctionTextByCode(state.lkpdAnswers[item.id]);
+        text += `${i + 1}. ${item.name} (${item.virusTag}) | Observasi: ${obs} | Fungsi: ${fnText}\n`;
+      });
+      text += `\nB. PERTANYAAN HOTS:\n1. Spesifisitas Reseptor & Spike: ${hots1}\n2. Efektivitas Sabun pada Amplop Lipid: ${hots2}\n`;
+      text += `\nC. KESIMPULAN:\n${conc}`;
+
+      // Menggunakan document.execCommand('copy') agar aman di lingkungan iFrame
+      const tempArea = document.createElement('textarea');
+      tempArea.value = text;
+      tempArea.style.position = 'fixed';
+      tempArea.style.opacity = '0';
+      document.body.appendChild(tempArea);
+      tempArea.select();
+      try {
+        document.execCommand('copy');
+        showToast('Ringkasan LKPD berhasil disalin ke clipboard!', '📋');
+      } catch (e) {
+        showToast('Gagal menyalin ringkasan LKPD.', '⚠️');
+      }
+      document.body.removeChild(tempArea);
+    }
+
+    /**
+     * ============================================================================
+     * 9. SPLASH SCREEN LOADING & INISIALISASI SAAT WINDOW ONLOAD
+     * ============================================================================
+     */
+    function runSplashLoading() {
+      const bar = document.getElementById('splash-loading-bar');
+      const pctEl = document.getElementById('splash-loading-percent');
+      const statusEl = document.getElementById('splash-loading-status');
+      const startBtn = document.getElementById('btn-splash-start');
+
+      let progress = 0;
+      const timer = setInterval(() => {
+        progress += Math.floor(Math.random() * 9) + 5;
+        if (progress >= 100) {
+          progress = 100;
+          clearInterval(timer);
+          if (statusEl) statusEl.textContent = 'Model 3D Virus & LKPD siap digunakan!';
+          if (startBtn) {
+            startBtn.classList.remove('hidden');
+            startBtn.classList.add('animate-fade-in');
+          }
+        } else if (progress >= 70) {
+          if (statusEl) statusEl.textContent = 'Menyiapkan mode Irisan (Cutaway) & Exploded View...';
+        } else if (progress >= 35) {
+          if (statusEl) statusEl.textContent = 'Membangun geometri 3D Bakteriofag T4, SARS-CoV-2 & TMV...';
+        }
+
+        if (bar) bar.style.width = `${progress}%`;
+        if (pctEl) pctEl.textContent = `${progress}%`;
+      }, 75);
+    }
+
+    function enterLabFromSplash() {
+      playSFX('start');
+      const splash = document.getElementById('splash-screen');
+      if (splash) {
+        splash.classList.add('splash-hide');
+        setTimeout(() => {
+          splash.style.display = 'none';
+          resizeThreeViewport();
+          showToast('Selamat datang di Lab Maya Biologi: Anatomi Virus 3D!', '🧬');
+        }, 700);
+      }
+    }
+
+    window.addEventListener('resize', resizeThreeViewport);
+
+    window.onload = function () {
+      initThreeEngine();
+      selectVirus('t4');
+      renderLKPDTable();
+      switchTab('simulasi');
+      resizeThreeViewport();
+      animate();
+      runSplashLoading();
+    };
+  </script>
+</body>
+</html>
